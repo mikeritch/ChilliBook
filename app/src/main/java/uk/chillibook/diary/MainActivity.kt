@@ -84,8 +84,19 @@ private fun DiaryHome(vm: DiaryViewModel, target: ReminderTarget?, consume: () -
     var editSlot by rememberSaveable { mutableStateOf("am") }
     var date by rememberSaveable { mutableStateOf(LocalDate.now().toString()) }
     var slot by rememberSaveable { mutableStateOf(if (LocalTime.now().hour < 15) "am" else "pm") }
-    val holder = rememberSaveableStateHolder()
+    val holder = key(vm.resetGeneration) { rememberSaveableStateHolder() }
     var todayVisit by rememberSaveable { mutableIntStateOf(0) }
+    var seenReset by rememberSaveable { mutableIntStateOf(vm.resetGeneration) }
+    LaunchedEffect(vm.resetGeneration) {
+        if (seenReset != vm.resetGeneration) {
+            seenReset = vm.resetGeneration
+            detail = null
+            editing = false
+            tab = "Today"
+            date = LocalDate.now().toString()
+            slot = if (LocalTime.now().hour < 15) "am" else "pm"
+        }
+    }
     LaunchedEffect(target) {
         if (target != null) {
             holder.removeState("Today-$todayVisit")
@@ -127,7 +138,7 @@ private fun DiaryHome(vm: DiaryViewModel, target: ReminderTarget?, consume: () -
                         Text(vm.status)
                         if (vm.status.startsWith("Couldn’t")) TextButton(onClick = vm::retry) { Text("Retry") }
                     }
-                    settings -> SettingsScreen(diary, vm::edit, vm::restore, vm.status, vm::retry, back)
+                    settings -> SettingsScreen(diary, vm::edit, vm::restore, vm.status, vm::retry, back, vm::reset, vm.resetting)
                     detail != null && editing -> holder.SaveableStateProvider("edit-${detail}") {
                         TodayScreen(diary,detail!!,editSlot,{detail=it},{editSlot=it},vm::edit,vm.status,vm::retry)
                     }

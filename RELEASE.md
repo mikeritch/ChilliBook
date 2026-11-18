@@ -7,7 +7,7 @@
 **Over USB.** Enable USB debugging and authorise the computer on the phone. Place the signed APK beside [Install ChilliBook.command](<release/Install ChilliBook.command>) and double-click the command on macOS. With Android SDK Platform-Tools on your path, you can also run the following from the project root.
 
 ```sh
-adb -d install -r release/ChilliBook-1.2.apk
+adb -d install -r release/ChilliBook-1.3.apk
 ```
 
 ## Back up or move the diary
@@ -26,12 +26,20 @@ Choose **Settings → Back up diary** and select a private destination. The JSON
 apk=app/build/outputs/apk/release/app-release.apk
 apksigner verify --print-certs "$apk"
 aapt dump badging "$apk" | head -1
-version=1.2  # set to the version you just built
+version=1.3  # set to the version you just built
 cp "$apk" "release/ChilliBook-$version.apk"
 git tag "v$version"
 git push origin HEAD "v$version"
 gh release create "v$version" "release/ChilliBook-$version.apk" --verify-tag --generate-notes --latest
 ```
+
+## Release 1.3
+
+Choose **Evening → Household tasks → Yes**, then **+ Cooking**. The selection saves and reveals its optional details. Tap the red minus to remove the activity or Undo to bring it back. Work and Socialising follow the same pattern. Other activities also accepts a name of your own. Previous diary and backup formats stay readable.
+
+**Settings → Reset all diary data** requires two confirmations. The final confirmation permanently clears the diary and resets local preferences, including reminders. Previously exported backup files remain available at their saved locations.
+
+The signed 1.2 → 1.3 rehearsal preserved every exported field in 354 day records, 673 check-ins, 154 multi-tag activities, three crash episodes and preferences. Focused emulator checks covered selecting and removing Cooking, restoring its duration with Undo, a custom Other activity, backup compatibility, cancelling both reset warnings and committing a reset in a separate synthetic diary.
 
 ## Release 1.2
 

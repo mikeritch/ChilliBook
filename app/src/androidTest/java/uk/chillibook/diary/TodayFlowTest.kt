@@ -7,6 +7,7 @@ import android.view.inspector.WindowInspector
 import androidx.core.view.descendants
 import androidx.test.filters.SdkSuppress
 import android.widget.DatePicker
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.test.*
@@ -122,7 +123,7 @@ class TodayFlowTest {
         }
     }
 
-    @Test fun editingOneActivityPreservesBothEntries() {
+    @Test fun activityToggleOpensDetailsAndUndoRestoresTheSameEntry() {
         assumeTrue(context.packageName.endsWith(".debug"))
         Storage(context).use { store ->
             val initial = runBlocking { store.read() }
@@ -130,23 +131,26 @@ class TodayFlowTest {
             try {
                 ActivityScenario.launch(MainActivity::class.java).use {
                     slot(morning = false)
-                    tap("Add activity")
-                    tap("Cooking")
-                    tap("Finish")
-                    tap("Add activity")
-                    tap("Visit")
-                    tap("Finish")
-                    awaitStored(store) { it.activities.size == 2 }
-                    val before = runBlocking { store.read() }.activities
-                    val cooking = before.single { it.tags == setOf("Cooking") }
-                    val visit = before.single { it.tags == setOf("Visit") }
-                    assertNotEquals(cooking.id, visit.id)
-                    tap("Cooking")
-                    tap("Laundry")
-                    tap("Finish")
-                    awaitStored(store) { diary ->
-                        diary.activities.toSet() == setOf(cooking.copy(tags = setOf("Cooking", "Laundry")), visit)
-                    }
+                    select("Household tasks", "Yes")
+                    awaitStored(store) { it.days.singleOrNull()?.household == true && it.activities.isEmpty() }
+                    fun toggle(action: String) =
+                        compose.onNodeWithContentDescription(action).performScrollTo().performClick()
+                    toggle("Select Cooking")
+                    tap("Under 15 min")
+                    awaitStored(store) { it.activities.singleOrNull()?.duration == "Under 15 min" }
+                    val cooking = runBlocking { store.read() }.activities.single()
+                    assertEquals(setOf("Cooking"), cooking.tags)
+                    toggle("Remove Cooking")
+                    awaitStored(store) { it.activities.isEmpty() && it.days.singleOrNull()?.household == true }
+                    tap("Undo")
+                    awaitStored(store) { it.activities == listOf(cooking) }
+                    tap("Write your own")
+                    compose.onNode(hasSetTextAction()).performScrollTo().performTextInput("Gardening")
+                    compose.onNode(hasSetTextAction()).assertTextContains("Gardening")
+                    compose.onNodeWithText("Add activity").assertIsEnabled().performSemanticsAction(SemanticsActions.OnClick)
+                    awaitStored(store) { diary -> diary.activities.any { it.tags == setOf(customActivityTag("Gardening")) } }
+                    toggle("Remove Gardening")
+                    awaitStored(store) { it.activities == listOf(cooking) && it.days.single().work == null }
                 }
             } finally {
                 runBlocking { store.replace(initial) }
@@ -174,8 +178,8 @@ class TodayFlowTest {
                     select("How refreshed did you feel on waking?", "Mostly")
                     slot(morning = false)
                     select(energyQuestion, "Very low")
-                    select("Did you work?", "No")
-                    select("Did you socialise?", "Yes")
+                    select("Work", "No")
+                    select("Socialising", "Yes")
                     select("How did today feel overall?", "Fairly well")
                     awaitStored(store) { data ->
                         val day = data.days.singleOrNull { it.date == today.toString() }

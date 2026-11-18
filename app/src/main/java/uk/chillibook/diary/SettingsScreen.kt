@@ -24,13 +24,14 @@ import java.time.LocalDate
 @Composable
 fun SettingsScreen(
     diary: Diary, edit: ((Diary) -> Diary) -> Unit, restore: (Diary) -> Unit,
-    status: String, retry: () -> Unit, onClose: () -> Unit
+    status: String, retry: () -> Unit, onClose: () -> Unit, reset: () -> Unit, resetting: Boolean
 ) {
     val resolver = LocalContext.current.contentResolver
     val scope = rememberCoroutineScope()
     var busy by remember { mutableStateOf(false) }
     var fileStatus by remember { mutableStateOf("") }
     var preview by remember { mutableStateOf<Diary?>(null) }
+    var resetStep by remember { mutableIntStateOf(0) }
     BackHandler(onBack = onClose)
 
     val create = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
@@ -87,7 +88,7 @@ fun SettingsScreen(
                 edit { current -> current.copy(prefs = current.prefs.copy(theme = id)) }
             }
         }
-        SaveNotice(status, retry)
+        if (!status.contains("reset", ignoreCase = true)) SaveNotice(status, retry)
         HorizontalDivider()
         ReminderSettings(diary.prefs, edit)
         HorizontalDivider()
@@ -98,18 +99,46 @@ fun SettingsScreen(
         Button(onClick = {
             fileStatus = ""
             create.launch("ChilliBook-${LocalDate.now()}.json")
-        }, enabled = !busy, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
+        }, enabled = !busy && !resetting, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
             Text("Back up diary")
         }
         OutlinedButton(onClick = {
             fileStatus = ""
             open.launch(arrayOf("*/*"))
-        }, enabled = !busy, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
+        }, enabled = !busy && !resetting, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
             Text("Restore diary")
         }
         if (fileStatus.isNotEmpty()) {
             Text(fileStatus, Modifier.semantics { liveRegion = LiveRegionMode.Polite })
         }
+        HorizontalDivider()
+        OutlinedButton(onClick = { resetStep = 1 }, enabled = !busy && !resetting,
+            modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
+            Text("Reset all diary data", color = MaterialTheme.colorScheme.error)
+        }
+        if (status.contains("reset", ignoreCase = true)) {
+            Text(status, Modifier.semantics { liveRegion = LiveRegionMode.Polite })
+        }
+    }
+
+    if (resetStep != 0) {
+        val final = resetStep == 2
+        AlertDialog(onDismissRequest = { resetStep = 0 },
+            title = { Text(if (final) "Permanently erase this diary?" else "Reset all diary data?") },
+            text = {
+                Text(if (final) "Every entry on this device will be permanently deleted. This cannot be undone."
+                    else "This permanently removes your check-ins, activities and crash history, resets your settings and turns off reminders. Backups you exported are kept.")
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    if (final) {
+                        resetStep = 0
+                        fileStatus = ""
+                        reset()
+                    } else resetStep = 2
+                }) { Text(if (final) "Permanently erase diary" else "Continue", color = MaterialTheme.colorScheme.error) }
+            },
+            dismissButton = { TextButton(onClick = { resetStep = 0 }) { Text("Cancel") } })
     }
 
     preview?.let { imported ->

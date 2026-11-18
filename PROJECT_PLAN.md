@@ -17,7 +17,7 @@ Build ChilliBook as a small illustrated diary. Give each screen one generous ser
 | Surface | What the person sees and does |
 |---|---|
 | **Today · Morning** | Start with the date, sun, and a wide Morning / Evening switch. Put five energy choices in a single row at normal phone size. Use ascending marks and a word on each. Follow with four sleep choices in a two-by-two grid. A finger can land anywhere on a choice. Selecting an answer fills it with teal and adds a tick. It stays in place so the second question is easy to reach. |
-| **Today · Evening** | Keep energy in the same position. Below it, give Work and Socialising their own rows with Yes and No on the right. Overall wellbeing follows, with optional details and **Crash started** below. An action never rearranges the screen under the person's thumb. A new crash marker immediately becomes **Back to my usual**, with Undo available. Tapping a Yes answer leaves details collapsed. |
+| **Today · Evening** | Keep energy in the same position. Below it, give Work and Socialising their own rows with Yes and No on the right. Overall wellbeing follows, with optional details and **Crash started** below. An action never rearranges the screen under the person's thumb. A new crash marker immediately becomes **Back to my usual**, with Undo available. In the current release, tapping Yes reveals that category’s presets directly below the answer. |
 | **History** | Use a week-by-week list. Give each day a narrow date column, then a sun and a moon with the two recorded energy labels. A second line holds the activity icons and words. “No entry” gets the same space and neutral colour as a recorded day. The whole row opens that date. A month picker reaches older entries without prolonged scrolling. |
 | **Patterns** | Lead with one energy chart. Morning uses teal circles, evening uses plum diamonds, and missing days break the lines. Align work or other selected activity marks with the dates beneath the plot. Below it, make the factor and follow-up period selectable. Show two bars on the same scale with counts such as “3 of 15”. **All levels and dates** opens the full distribution, gaps and underlying entries. One recorded day shows one point. An empty chart offers a link to Today. |
 
@@ -48,7 +48,7 @@ Open directly to **Today**. Show the date and a **Morning / Evening** switch, wi
 |---|---|---|
 | First question | **How much energy do you have now?** Five labelled choices from Very low to High. | The same energy question and choices. This gives each day two comparable observations. |
 | Next in reach | **How refreshed did you feel on waking?** Unrefreshed / A little / Mostly / Fully. | **Did you work?** and **Did you socialise?** Each has a visible Yes and No. Then **How did today feel overall?** Very rough / Rough / Mixed / Fairly well / Well. |
-| When there is more to say | Open **Symptoms** or mark **Crash started**. Yesterday evening is one date change away. | Open **Activities & symptoms** for household tasks, details about work or a visit, rest, symptoms or a change in what you could do. |
+| When there is more to say | Open **Symptoms** or mark **Crash started**. Yesterday evening is one date change away. | Use **What did you do?** for work, household tasks and socialising. **Other activities** covers activities such as walking and rest. Open **Symptoms & context** for symptom ratings or a change in what you could do. |
 
 The energy choices are **Very low / Low / Medium / Fairly high / High**, anchored to the person's own experience. Keep the words and order stable across screens and over time. “How did today feel overall?” is deliberately broader. Someone can report low energy and a lovely day. Leaving the sleep, work or wellbeing question unanswered is always a valid way to finish.
 
@@ -154,3 +154,11 @@ For each signed release:
 - The user initiates every network operation from Settings. Check GitHub's public latest-release metadata over HTTPS. Download on request, verify the asset digest, application ID, signer and higher version code, then hand the private file to the Android installer for confirmation. Diary features and reminders continue offline.
 - Put work, socialising and household answers next to the evening's activities. One activity can have several tags. Tapping Add opens one editor in the evening view, with grouped presets and optional details. Each choice saves immediately. Opening and closing an empty editor leaves the diary untouched.
 - Keep existing entry IDs, timestamps, tags and optional fields. A tagged entry supplies its category's Yes answer. An explicit No remains meaningful after removing a mistakenly added tag. History edits use the same editor. Room and backup schemas remain at version 2 for this release.
+
+## Activities and permanent reset · 1.3
+
+Work, Household tasks and Socialising accept an explicit Yes or No. Yes saves independently and reveals that category’s activities. Each plus selects one activity for that day. A selected activity shows a red minus and its optional details open inline. Removing the selection preserves the category answer. Undo restores the entry and its details. Other activities offers everyday presets and a write-in without requiring a day-level answer. The evening editor in History follows the same flow.
+
+Preserve the identity and details of existing entries, including combined activities, repeats and entries recorded with details alone. An update must never collapse older records to fit a toggle. Charts use the same recorded dates and unanswered-day rules as before.
+
+Settings provides a permanent on-device reset behind two warnings. Confirming resets entries, preferences and reminders. Cancelling at either step preserves the diary. Exported backups belong to their chosen destination.

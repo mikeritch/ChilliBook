@@ -30,18 +30,11 @@ fun TodayScreen(diary: Diary, date: String, slot: String, onDate: (String) -> Un
     val context = LocalContext.current
     val title = if (morning) "Morning" else "Evening"
     var sheet by rememberSaveable(date, slot) { mutableStateOf(false) }
-    var editingId by rememberSaveable(date, slot) { mutableStateOf<String?>(null) }
-    var conflict by rememberSaveable(date) { mutableStateOf<String?>(null) }
     val activeEpisode = diary.episodes.filter { it.start <= date && (it.end == null || it.end >= date) }.maxByOrNull { it.start }
     var undoId by rememberSaveable(date) { mutableStateOf<String?>(null) }
     var undoStart by rememberSaveable(date) { mutableStateOf(false) }
     var showEpisodes by rememberSaveable(date) { mutableStateOf(false) }
     val scroll = rememberScrollState()
-    fun flag(tag: String, value: Boolean?) {
-        if (value != true && diary.activities.any { it.date == date && it.tags.any { t -> t in categoryTags[tag].orEmpty() } }) {
-            conflict = tag
-        } else edit { d -> d.changeDay(date) { it.setFlag(tag, value) } }
-    }
     Column(Modifier.fillMaxSize().verticalScroll(scroll).padding(horizontal = 20.dp)) {
         TitleArt(title, slot)
         val prettyDate = LocalDate.parse(date).format(DateTimeFormatter.ofPattern("EEEE, d MMM", Locale.getDefault()))
@@ -65,7 +58,7 @@ fun TodayScreen(diary: Diary, date: String, slot: String, onDate: (String) -> Un
                 edit { d -> d.changeCheck(date, slot) { it.copy(sleep = level) } }
             }
         } else {
-            EveningActivities(diary, date, edit, ::flag, editingId) { editingId = it }
+            key(date) { EveningActivities(diary, date, edit) }
             Spacer(Modifier.height(14.dp))
             val question = "How did today feel overall?"
             QuestionText(question)
@@ -111,16 +104,7 @@ fun TodayScreen(diary: Diary, date: String, slot: String, onDate: (String) -> Un
         }
     }
     if (showEpisodes) EpisodeSheet(diary, date, edit, status, retry) { showEpisodes = false }
-    conflict?.let { tag ->
-        val entries = diary.activities.filter { it.date == date && it.tags.any { t -> t in categoryTags[tag].orEmpty() } }
-        AlertDialog(onDismissRequest = { conflict = null }, title = { Text("Review activity entries") },
-            text = { Column(Modifier.verticalScroll(rememberScrollState())) {
-                Text("These entries record this activity. You can keep them or edit their tags before changing your answer.")
-                entries.forEach { entry ->
-                    TextButton(onClick = { editingId = entry.id; conflict = null }) { Text("Edit · " + entry.activityLabel()) }
-                }
-            } }, confirmButton = { TextButton(onClick = { conflict = null }) { Text("Keep answer") } })
-    }
+
 }
 
 @Composable

@@ -13,11 +13,12 @@ import kotlinx.coroutines.sync.withLock
 
 // A tap already accepted by Today must finish even if Back immediately closes the activity.
 // Serialize new screens' opening reads behind the preceding screen's writes and close.
-private object DiaryOperations {
+internal object DiaryOperations {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val lock = Mutex()
+    suspend fun serialized(operation: suspend () -> Unit) = lock.withLock { operation() }
     fun enqueue(operation: suspend () -> Unit) {
-        scope.launch { lock.withLock { operation() } }
+        scope.launch { serialized(operation) }
     }
 }
 
@@ -31,7 +32,52 @@ class DiaryViewModel(app: Application) : AndroidViewModel(app) {
     private var pendingRestore = false
     private var revision = 0L
 
-    init { load() }
+    var resetting by mutableStateOf(false)
+        private set
+    var resetGeneration by mutableIntStateOf(0)
+        private set
+
+    // More than one activity can be alive when a notification opens the diary.
+    private companion object {
+        val openModels = mutableSetOf<DiaryViewModel>()
+    }
+
+    init {
+        openModels.add(this)
+        load()
+    }
+
+    private fun acceptReset(empty: Diary) {
+        committed = empty
+        diary = empty
+        pendingRestore = false
+        resetGeneration++
+        status = "Diary reset"
+    }
+
+    fun reset() {
+        if (resetting || diary == null) return
+        resetting = true
+        revision++
+        status = "Resetting diary…"
+        DiaryOperations.enqueue {
+            try {
+                val empty = Diary()
+                storage.replace(empty)
+                openModels.forEach { it.acceptReset(empty) }
+                try {
+                    Reminders.clear(getApplication())
+                } catch (_: RuntimeException) {
+                    status = "Diary reset. Couldn’t clear reminders."
+                }
+            } catch (e: CancellationException) { throw e }
+            catch (_: Exception) {
+                status = "Couldn’t reset diary. Your entries are still here."
+            } finally {
+                resetting = false
+            }
+        }
+    }
 
     fun refreshReminders() {
         if (diary != null) Reminders.reconcile(getApplication(), committed)
@@ -51,10 +97,12 @@ class DiaryViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     private fun persist(target: Diary) {
+        val generation = resetGeneration
         val writeRevision = ++revision
         val replace = pendingRestore
         status = if (replace) "Restoring…" else "Saving…"
         DiaryOperations.enqueue {
+            if (generation != resetGeneration) return@enqueue
             try {
                 if (replace) storage.replace(target) else storage.save(committed, target)
                 committed = target
@@ -71,6 +119,7 @@ class DiaryViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun edit(transform: (Diary) -> Diary) {
+        if (resetting) return
         val next = transform(diary ?: return)
         if (next == diary) return
         diary = next
@@ -78,16 +127,21 @@ class DiaryViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun restore(value: Diary) {
+        if (resetting) return
         pendingRestore = true
         diary = value
         persist(value)
     }
 
     fun retry() {
+        if (resetting) return
         diary?.let(::persist) ?: load()
     }
 
     override fun onCleared() {
-        DiaryOperations.enqueue { storage.close() }
+        DiaryOperations.enqueue {
+            openModels.remove(this)
+            storage.close()
+        }
     }
 }

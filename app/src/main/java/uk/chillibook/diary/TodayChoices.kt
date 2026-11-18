@@ -109,7 +109,12 @@ internal fun AnswerGrid(question: String, labels: List<String>, selected: Int?, 
 
 @Composable
 internal fun DetailLink(label: String, trailing: String = "›", icon: Int? = null, onClick: () -> Unit) {
-    Row(Modifier.fillMaxWidth().clickable(role = Role.Button, onClick = onClick).heightIn(min = 54.dp),
+    val interactions = remember { MutableInteractionSource() }
+    val pressed by interactions.collectIsPressedAsState()
+    val colors = MaterialTheme.colorScheme
+    Row(Modifier.fillMaxWidth().background(colors.primary.copy(alpha = if (pressed) .10f else 0f))
+        .clickable(interactionSource = interactions, indication = LocalIndication.current,
+            role = Role.Button, onClick = onClick).heightIn(min = 54.dp),
         verticalAlignment = Alignment.CenterVertically) {
         if (icon != null) {
             Icon(painterResource(icon), null, Modifier.size(22.dp), tint = MaterialTheme.colorScheme.primary)

@@ -29,6 +29,16 @@ class StorageBackupTest {
         assertEquals(sample, Backup.decode(Backup.encode(sample)))
     }
 
+    @Test fun activityRoundTripPreservesLegacyAndCustomRecords() {
+        val legacy = ActivityEntry(id = "one", date = morning.date, tags = setOf("Call", "Cooking"),
+            workPlace = "On site", effort = "High", worth = "Mixed", at = at, zone = zone)
+        val activities = listOf(legacy, legacy.copy(id = "two"),
+            legacy.copy(id = "details-only", tags = emptySet()),
+            legacy.copy(id = "custom", tags = setOf(customActivityTag("Work · Café"))))
+        val original = sample.copy(activities = activities)
+        assertEquals(original, Backup.decode(Backup.encode(original)))
+    }
+
     @Test fun importsEarlierBackupAndValidatesNewReminderSettings() {
         val configured = sample.copy(prefs = sample.prefs.copy(morningReminder = 0, eveningReminder = 1439))
         val current = Backup.encode(configured)

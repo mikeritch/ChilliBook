@@ -97,7 +97,7 @@ fun PatternsScreen(diary: Diary, onDate: (String) -> Unit, onToday: () -> Unit) 
     val metrics = listOf("Energy") + diary.prefs.pins.sorted()
     val tags = remember(index, displayStart, displayEnd) {
         diary.activities.filter { it.date >= displayStart.toString() && it.date <= displayEnd.toString() }
-            .flatMap { it.tags }.distinct().sorted()
+            .flatMap { it.tags }.sorted().distinctBy(::activityTagKey)
     }
     val recordedSymptoms = remember(index, displayStart, displayEnd) {
         diary.checks.filter { it.date >= displayStart.toString() && it.date <= displayEnd.toString() }
@@ -221,11 +221,11 @@ fun PatternsScreen(diary: Diary, onDate: (String) -> Unit, onToday: () -> Unit) 
                             val dates = if (lookup in recordedSymptoms) {
                                 diary.checks.filter { lookup in it.symptoms }.map { it.date }.distinct()
                             } else {
-                                index.activities.filterValues { entries -> entries.any { lookup in it.tags } }.keys.toList()
+                                index.activities.filterValues { entries -> entries.any { it.hasActivityTag(lookup) } }.keys.toList()
                             }
                             items(dates.filter { it >= displayStart.toString() && it <= displayEnd.toString() }.sortedDescending()) { day ->
                                 val date = LocalDate.parse(day)
-                                val entries = index.activities[day].orEmpty().filter { lookup in it.tags }
+                                val entries = index.activities[day].orEmpty().filter { it.hasActivityTag(lookup) }
                                 val context = if (lookup in recordedSymptoms) {
                                     "Morning · ${severityLabels.value(index.metric(date, "am", lookup))}\n" +
                                         "Evening · ${severityLabels.value(index.metric(date, "pm", lookup))}"

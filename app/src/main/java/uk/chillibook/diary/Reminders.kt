@@ -41,6 +41,22 @@ object Reminders {
     internal fun minute(prefs: Prefs, slot: String) = if (slot == "am") prefs.morningReminder else prefs.eveningReminder
     private fun state(context: Context) = context.getSharedPreferences("reminder_delivery", Context.MODE_PRIVATE)
 
+    @Synchronized
+    internal fun clear(context: Context) {
+        val alarms = context.getSystemService(AlarmManager::class.java)
+        val manager = context.getSystemService(NotificationManager::class.java)
+        for (slot in listOf("am", "pm")) {
+            val intent = Intent(context, ReminderReceiver::class.java).setAction(FIRE)
+            PendingIntent.getBroadcast(context, id(slot), intent,
+                PendingIntent.FLAG_NO_CREATE or PendingIntent.FLAG_IMMUTABLE)?.let {
+                alarms.cancel(it)
+                it.cancel()
+            }
+            manager.cancel(id(slot))
+        }
+        state(context).edit().clear().apply()
+    }
+
     internal fun allowed(context: Context): Boolean {
         val manager = context.getSystemService(NotificationManager::class.java)
         return (Build.VERSION.SDK_INT < 33 || context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) ==
@@ -139,9 +155,11 @@ class ReminderReceiver : BroadcastReceiver() {
         val pending = goAsync()
         CoroutineScope(Dispatchers.IO).launch {
             try {
-                val diary = Storage(context).use { it.read() }
-                if (intent.action == Reminders.FIRE) Reminders.deliver(context, diary, intent)
-                else Reminders.schedule(context, diary.prefs, diary, true)
+                DiaryOperations.serialized {
+                    val diary = Storage(context).use { it.read() }
+                    if (intent.action == Reminders.FIRE) Reminders.deliver(context, diary, intent)
+                    else Reminders.schedule(context, diary.prefs, diary, true)
+                }
             } catch (_: RuntimeException) {
                 // Storage or Android services can be unavailable. Opening the app reconciles again.
             } finally {

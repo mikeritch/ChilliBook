@@ -44,7 +44,7 @@ internal class PatternIndex(val diary: Diary) {
         val factor = Factor.values().firstOrNull { it.label == name }
         return dateSequence(start, end).groupBy { date ->
             if (factor != null) status(date, factor)
-            else true.takeIf { activities[date.toString()].orEmpty().any { name in it.tags } }
+            else true.takeIf { activities[date.toString()].orEmpty().any { it.hasActivityTag(name) } }
         }
     }
 
