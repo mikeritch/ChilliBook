@@ -4,6 +4,8 @@ ChilliBook is an Android diary for people living with ME/CFS. A single answer sa
 
 [Download the signed APK](https://github.com/mikeritch/ChilliBook/releases/latest) · [Installation and release guide](RELEASE.md)
 
+![Evening check-in, activity editor and update settings on an Android emulator](verification/1.2/running-screens.png)
+
 ## Privacy and updates
 
 Your diary lives in a local Room database. Check-ins, charts and reminders work offline. ChilliBook contacts GitHub when you choose to check for or download a release. GitHub receives ordinary download request information such as the IP address. Diary entries stay on the phone unless you explicitly export them. An exported JSON file contains readable health data.

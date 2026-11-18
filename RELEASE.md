@@ -37,6 +37,8 @@ gh release create "v$version" "release/ChilliBook-$version.apk" --verify-tag --g
 
 Evening groups work, socialising and household answers with the day's activity entries. Add one activity, choose its tags and optionally add duration, effort, demands or personal value. Edit an entry directly from the same screen. The data format is compatible with 1.1.
 
+On an isolated Android 17 emulator, a same-key rehearsal build fetched the public 1.2 release, verified the APK, opened the Android installer and updated in place. The installed app then reported it was current. Comparing the complete export to the original 1.1 fixture matched all 354 days, 673 check-ins, 154 activities, three crash episodes and preferences. A separate activity test added two entries, edited one and confirmed both retained their IDs. The inline editor was inspected at ordinary and 200% text sizes.
+
 ## Version 1.1 update
 
 The 1.0 → 1.1 signed upgrade retained 354 day records, 673 check-ins, 154 activities, three crash episodes and existing preferences on an isolated Android 17 emulator. All fields matched after the update. Both reminder times start off. Choose morning and evening times independently in Settings. Delivery follows Android’s inexact alarm scheduling.
