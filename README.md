@@ -4,7 +4,7 @@ ChilliBook is an Android diary for people living with ME/CFS. A single answer sa
 
 [Download the signed APK](https://github.com/mikeritch/ChilliBook/releases/latest) · [Installation and release guide](RELEASE.md)
 
-![Night-mode check-in, 90-day timeline, activity breakdown and dated History sections on Android](verification/1.5/running-screens.png)
+![Pastel morning check-in, grouped Work, a Cooking pin and filtered History on Android](verification/1.6/running-screens.png)
 
 ## Privacy and updates
 

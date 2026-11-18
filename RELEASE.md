@@ -7,7 +7,7 @@
 **Over USB.** Enable USB debugging and authorise the computer on the phone. Place the signed APK beside [Install ChilliBook.command](<release/Install ChilliBook.command>) and double-click the command on macOS. With Android SDK Platform-Tools on your path, you can also run the following from the project root.
 
 ```sh
-adb -d install -r release/ChilliBook-1.5.apk
+adb -d install -r release/ChilliBook-1.6.apk
 ```
 
 ## Back up or move the diary
@@ -26,12 +26,20 @@ Choose **Settings → Back up diary** and select a private destination. The JSON
 apk=app/build/outputs/apk/release/app-release.apk
 apksigner verify --print-certs "$apk"
 aapt dump badging "$apk" | head -1
-version=1.5  # set to the version you just built
+version=1.6  # set to the version you just built
 cp "$apk" "release/ChilliBook-$version.apk"
 git tag "v$version"
 git push origin HEAD "v$version"
 gh release create "v$version" "release/ChilliBook-$version.apk" --verify-tag --generate-notes --latest
 ```
+
+## Release 1.6
+
+Work now has one optional setup per day for activities, day length, effort and demands. Use the pin inside Work to save the complete setup, then apply it to another date. Household, social and Other activities each have their own pin for duration, effort, demands and worthwhile. Custom activities keep their names. The Yesterday shortcut opens the same check-in slot. History can search the whole diary for a symptom or activity.
+
+The light theme has lavender surfaces, pastel answer scales and a smiling outline bolt. Earlier work entries keep their original fields and remain individually editable. Room migrates them on first open. Backups now include grouped Work entries and every saved activity setup.
+
+A signed in-place update from 1.5 preserved all 354 day records, 673 check-ins, 154 activities and preferences in the synthetic diary. On the emulator, a test saved independent Work and Cooking pins, applied both to yesterday and removed the Cooking pin while retaining the Work pin and both diary entries.
 
 ## Release 1.5
 

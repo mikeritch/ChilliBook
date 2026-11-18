@@ -40,6 +40,8 @@ class DiaryMigrationTest {
 
     @Test fun productionOpenMigratesPopulatedV3AndKeepsLaterWrites() = checkUpgrade(3)
 
+    @Test fun productionOpenMigratesPopulatedV4AndKeepsLaterWrites() = checkUpgrade(4)
+
     private fun checkUpgrade(version: Int) = runBlocking {
         val at = "2026-11-18T16:02:12Z"
         val zone = "America/New_York"
@@ -52,21 +54,22 @@ class DiaryMigrationTest {
             db.execSQL("INSERT INTO checks VALUES (?,'am',NULL,1,?, ?,?)", arrayOf(date, """{"Brain fog":0}""", at, zone))
             db.execSQL("INSERT INTO checks VALUES (?,'pm',0,NULL,'{}',?,?)", arrayOf(missingMorning, at, zone))
             db.execSQL("""INSERT INTO activities (id,date,tags,duration,effort,demands,worth,workLength,workPlace,at,zone)
-                VALUES ('act',?, ?,NULL,'Light',?,'Yes',NULL,NULL,?,?)""",
-                arrayOf(date, """["Cooking","Visit"]""", """["Thinking"]""", at, zone))
+                VALUES ('act',?, ?,'Under 15 min','Light',?,'Yes','Part day','Both',?,?)""",
+                arrayOf(date, """["Cooking","Visit","Meetings"]""", """["Thinking"]""", at, zone))
             if (version < 3) db.execSQL("INSERT INTO episodes VALUES ('spell',?,NULL,1,0,NULL,?,?)", arrayOf(date, at, zone))
-            db.execSQL("INSERT INTO prefs (id,theme,pins) VALUES (1,'dark',?)", arrayOf("""["Headache"]"""))
+            if (version == 4) db.execSQL("INSERT INTO prefs (id,theme) VALUES (1,'dark')")
+            else db.execSQL("INSERT INTO prefs (id,theme,pins) VALUES (1,'dark',?)", arrayOf("""["Headache"]"""))
             if (version >= 2) db.execSQL("UPDATE prefs SET morningReminder = 480")
         }
         val original = Diary(
             listOf(Day(date, work = false, household = true, wellbeing = 2, impact = "Slowed down", context = setOf("Fighting a bug"), at = at, zone = zone)),
             listOf(Check(date, "am", sleep = 1, symptoms = mapOf("Brain fog" to 0), at = at, zone = zone),
                    Check(missingMorning, "pm", energy = 0, at = at, zone = zone)),
-            listOf(ActivityEntry("act", date, setOf("Cooking","Visit"), effort = "Light", demands = setOf("Thinking"),
-                worth = "Yes", at = at, zone = zone)),
+            listOf(ActivityEntry("act", date, setOf("Cooking","Visit","Meetings"), duration = "Under 15 min", effort = "Light", demands = setOf("Thinking"),
+                worth = "Yes", workLength = "Part day", workPlace = "Both", at = at, zone = zone)),
             Prefs(theme = "dark", morningReminder = if (version >= 2) 480 else null)
         )
-        val updated = original.copy(prefs = original.prefs.copy(eveningReminder = 21 * 60))
+        val updated = original.copy(prefs = original.prefs.copy(eveningReminder = 21 * 60, workPin = WorkSetup(effort = "High")))
         Storage(context, file).use {
             assertEquals(original, it.read())
             it.save(original, updated)

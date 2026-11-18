@@ -7,6 +7,12 @@ import org.json.JSONArray
 import org.json.JSONObject
 
 class ValueConverters {
+    @TypeConverter fun writeActivityPins(value: Map<String, ActivitySetup>): String = Backup.encodeActivityPins(value).toString()
+    @TypeConverter fun readActivityPins(raw: String): Map<String, ActivitySetup> = Backup.decodeActivityPins(JSONObject(raw))
+
+    @TypeConverter fun writeWorkSetup(value: WorkSetup?): String? = value?.let { Backup.encodeWorkSetup(it).toString() }
+    @TypeConverter fun readWorkSetup(raw: String?): WorkSetup? = raw?.let { Backup.decodeWorkSetup(JSONObject(it)) }
+
     @TypeConverter fun writeSet(value: Set<String>): String = JSONArray(value.sorted()).toString()
     @TypeConverter fun readSet(raw: String): Set<String> = JSONArray(raw).let { array ->
         (0 until array.length()).mapTo(linkedSetOf()) { array.getString(it) }
@@ -32,9 +38,9 @@ interface DiaryDao {
     @Delete suspend fun deleteActivity(value: ActivityEntry)
 }
 
-@Database(entities = [Day::class, Check::class, ActivityEntry::class, Prefs::class], version = 4, exportSchema = true,
+@Database(entities = [Day::class, Check::class, ActivityEntry::class, Prefs::class], version = 5, exportSchema = true,
     autoMigrations = [AutoMigration(from = 1, to = 2), AutoMigration(from = 2, to = 3, spec = RemoveRetiredFields::class),
-        AutoMigration(from = 3, to = 4, spec = RemoveSymptomPins::class)])
+        AutoMigration(from = 3, to = 4, spec = RemoveSymptomPins::class), AutoMigration(from = 4, to = 5)])
 @TypeConverters(ValueConverters::class)
 abstract class DiaryDatabase : RoomDatabase() {
     abstract fun diary(): DiaryDao

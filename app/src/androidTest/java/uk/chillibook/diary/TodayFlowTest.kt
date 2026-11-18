@@ -161,6 +161,50 @@ class TodayFlowTest {
     }
 
     @SdkSuppress(minSdkVersion = 29)
+    @Test fun workAndCookingPinsCopyIndependentlyToYesterday() {
+        assumeTrue(context.packageName.endsWith(".debug"))
+        Storage(context).use { store ->
+            val initial = runBlocking { store.read() }
+            assumeTrue(initial.dates().isEmpty())
+            val current = today.toString()
+            val previous = yesterday.toString()
+            val setup = WorkSetup(setOf("Commute", "Meetings"), "Part day", "Moderate", setOf("Thinking"))
+            val cooking = ActivityEntry(date = current, tags = setOf("Cooking"), duration = "15–60 min",
+                effort = "Light", demands = setOf("Upright"), worth = "Yes")
+            val seeded = Diary(days = listOf(Day(current, work = true, household = true)),
+                activities = listOf(cooking)).editWorkSetup(current) { setup }
+            fun press(label: String) = compose.onNodeWithContentDescription(label).performScrollTo().performClick()
+            try {
+                runBlocking { store.replace(seeded) }
+                ActivityScenario.launch(MainActivity::class.java).use {
+                    slot(morning = false)
+                    press("Pin these work details")
+                    press("Pin these Cooking details")
+                    tap("Yesterday")
+                    select("Did you work?", "Yes")
+                    press("Open pinned work setup")
+                    tap("Use for this day")
+                    select("Household tasks", "Yes")
+                    press("Select Cooking")
+                    press("Open pinned Cooking setup")
+                    tap("Use for this day")
+                    awaitStored(store) { diary ->
+                        val copied = diary.activities.find { it.date == previous && it.tags == cooking.tags }
+                        diary.activities.find { it.date == previous && it.workSetup }?.asWorkSetup() == setup &&
+                            copied != null && copied.duration == cooking.duration && copied.effort == cooking.effort &&
+                            copied.demands == cooking.demands && copied.worth == cooking.worth
+                    }
+                    press("Open pinned Cooking setup")
+                    tap("Unpin")
+                    awaitStored(store) { it.prefs.activityPins.isEmpty() && it.prefs.workPin == setup &&
+                        it.activities.count { row -> row.date == previous } == 2 && cooking in it.activities }
+                }
+            } finally {
+                runBlocking { store.replace(initial) }
+            }
+        }
+    }
+
     @Test fun oneTapReopenFourTapEveningAndYesterdayCorrection() {
         // The release package and owner data are never test fixtures.
         assumeTrue(context.packageName.endsWith(".debug"))
@@ -180,7 +224,7 @@ class TodayFlowTest {
                     select("How refreshed did you feel on waking?", "Mostly")
                     slot(morning = false)
                     select(energyQuestion, "Very low")
-                    select("Work", "No")
+                    select("Did you work?", "No")
                     select("Socialising", "Yes")
                     select("How did today feel overall?", "Fairly well")
                     awaitStored(store) { data ->

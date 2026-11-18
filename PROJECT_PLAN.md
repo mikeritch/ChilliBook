@@ -2,7 +2,7 @@
 
 A private diary for one person balancing mild-to-moderate ME/CFS with work, socialising and household life. In the morning it should take two taps to say how the night went and how much energy is available. In the evening it should be just as easy to record a good visit with a friend as a difficult day at work. Months later, the person should be able to see what they enjoyed, what they could manage and how they felt afterwards.
 
-The original design reference and milestone descriptions document the first release. The current 1.5 changes are specified below.
+The original design reference and milestone descriptions document the first release. The current 1.6 changes are specified below.
 
 The **first release** is a privately installed Android app with offline check-ins, editable history, personal charts and a restorable backup. The two check-ins and emphasis on ordinary working life are the owner's choices. The labels, timings and visual palette below are starting points to try on their phone.
 
@@ -178,3 +178,11 @@ Select and clear energy, waking refreshment and wellbeing in place. Use centred 
 Retire symptom pins, the separate answer editor and the evening question about changes to plans. Keep existing answers to that question in History and exports. Room schema 4 removes the pin preference. Backup format 4 retains import support for formats 1–3.
 
 History shows the two previous dates, the next morning and the morning after, each with its own dated section. Keep gaps and future dates explicit. Patterns plots morning and evening across the full 90 days. All time shows monthly distributions for longer spans. Offer all known symptoms as timeline metrics. Show recorded days for each activity together. Selecting one opens its weekday breakdown and the dates behind it.
+
+## Work, backfilling and finding entries · 1.6
+
+Work Yes saves on its own. On the same screen, optionally select Commute, Meetings or Focused work, and record one day length, effort and set of demands for the whole work day. Place one pin button inside expanded Work. Save the entire setup, apply it to another date, replace it explicitly or unpin it. Subsequent changes to a diary entry and its saved setup are independent. Each named household, social or Other activity also has a pin in its own editor. Save its duration, effort, demands and worthwhile answer together. Keep pinned custom names available when their last diary entry is removed.
+
+Keep historical activities and their individual settings, durations and worthwhile answers accessible. Room schema 5 marks newly grouped work entries and adds preferences for the Work pin and the individual activity pins. Backup format 5 includes both additions and reads formats 1–4. Keep the original IDs, diary dates, timestamps, fields and mixed tags during migration.
+
+Place Yesterday beside the date on both check-ins and offer Today when backfilling. History searches recorded symptoms, activities and positive category answers across all months. Use cool lavender pages with pastel rose, periwinkle and mint controls in light mode. Show a roomy outline bolt with two eyes and a smile in the energy question.

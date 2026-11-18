@@ -19,11 +19,17 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.*
 
 private val paper = lightColorScheme(
-    background = Color(0xFFFAF7F1), surface = Color(0xFFFFFCF7), onSurface = Color(0xFF322A37),
-    onBackground = Color(0xFF322A37), primary = Color(0xFF28665B), onPrimary = Color.White,
-    onSurfaceVariant = Color(0xFF665D66), surfaceVariant = Color(0xFFEEE8DF),
-    outline = Color(0xFF837B74), outlineVariant = Color(0xFFE3DBD1), tertiary = Color(0xFF795576),
-    secondaryContainer = Color(0xFFDCEBE4), onSecondaryContainer = Color(0xFF205B50))
+    background = Color(0xFFF7F8FF), surface = Color(0xFFFCFCFF), onSurface = Color(0xFF273049),
+    onBackground = Color(0xFF273049), primary = Color(0xFF22675F), onPrimary = Color.White,
+    primaryContainer = Color(0xFFC6ECE2), onPrimaryContainer = Color(0xFF153F38),
+    secondary = Color(0xFF505E94), onSecondary = Color.White,
+    secondaryContainer = Color(0xFFDBE5FF), onSecondaryContainer = Color(0xFF334873),
+    tertiary = Color(0xFF765288), onTertiary = Color.White,
+    tertiaryContainer = Color(0xFFEFDDF9), onTertiaryContainer = Color(0xFF472650),
+    onSurfaceVariant = Color(0xFF525D74), surfaceVariant = Color(0xFFE8EAF8),
+    surfaceContainerLow = Color(0xFFF2F4FD), surfaceContainer = Color(0xFFEDEFF9),
+    surfaceContainerHigh = Color(0xFFE8EAF6), surfaceContainerHighest = Color(0xFFE1E5F2),
+    outline = Color(0xFF757F97), outlineVariant = Color(0xFFD5DCEC), error = Color(0xFFA2254D))
 private val night = darkColorScheme(
     background = Color(0xFF141526), surface = Color(0xFF20213A), onSurface = Color(0xFFFBF4FF),
     onBackground = Color(0xFFFBF4FF), primary = Color(0xFF65E5CD), onPrimary = Color(0xFF003D35),
@@ -62,15 +68,15 @@ fun TitleArt(title: String, art: String) {
 internal fun categoryAccent(category: String): Color {
     val dark = MaterialTheme.colorScheme.background.luminance() < .5f
     return when (category) {
-        "Work" -> if (dark) Color(0xFF9DB5FF) else Color(0xFF475A8F)
-        "Household" -> if (dark) Color(0xFFFFB47E) else Color(0xFF895029)
+        "Work" -> if (dark) Color(0xFF9DB5FF) else Color(0xFF50649A)
+        "Household" -> if (dark) Color(0xFFFFB47E) else Color(0xFF805285)
         "Socialising", "Symptoms" -> MaterialTheme.colorScheme.tertiary
         else -> MaterialTheme.colorScheme.primary
     }
 }
 
 // Order runs from difficult to comfortable. Each endpoint has a separate dark-theme ink.
-private val paperScale = listOf(0xFF92465A, 0xFF945339, 0xFF786021, 0xFF4C7040, 0xFF246759).map { Color(it) }
+private val paperScale = listOf(0xFFF4BED3, 0xFFF7CDCC, 0xFFDAD2F6, 0xFFC4E7CE, 0xFFA7E2D7).map { Color(it) }
 private val nightScale = listOf(0xFFFF94AE, 0xFFFFAE86, 0xFFF7D477, 0xFFB1E68D, 0xFF64E1C4).map { Color(it) }
 
 @Composable
@@ -85,6 +91,6 @@ internal fun scaleAccent(labels: List<String>, index: Int): Color? {
 internal fun DiaryIcon(icon: Int, accent: Color, modifier: Modifier = Modifier) {
     Box(modifier.size(36.dp).background(accent.copy(alpha = .12f), CircleShape),
         contentAlignment = Alignment.Center) {
-        Icon(painterResource(icon), null, Modifier.size(if (icon == R.drawable.diary_spark) 29.dp else 23.dp), tint = accent)
+        Icon(painterResource(icon), null, Modifier.size(if (icon == R.drawable.diary_spark) 32.dp else 23.dp), tint = accent)
     }
 }

@@ -32,7 +32,7 @@ class StorageBackupTest {
         val check = morning.copy(symptoms = mapOf("Brain fog" to UNRATED_SYMPTOM, "Headache" to 0))
         val original = sample.copy(checks = listOf(check))
         val backup = JSONObject(Backup.encode(original))
-        assertEquals(4, backup.getInt("version"))
+        assertEquals(5, backup.getInt("version"))
         assertFalse(backup.getJSONObject("prefs").has("pins"))
         assertFalse(backup.has("episodes"))
         assertFalse(backup.getJSONArray("days").getJSONObject(0).has("workOff"))
@@ -54,6 +54,56 @@ class StorageBackupTest {
             legacy.copy(id = "custom", tags = setOf(customActivityTag("Work · Café"))))
         val original = sample.copy(activities = activities)
         assertEquals(original, Backup.decode(Backup.encode(original)))
+    }
+
+    @Test fun workPinAndGroupedWorkRoundTripWithoutChangingLegacyRecords() = runBlocking {
+        val pin = WorkSetup(setOf("Meetings", "Commute"), "Full day", "Moderate", setOf("Thinking"))
+        val grouped = ActivityEntry(id = "group", date = morning.date, tags = pin.parts + "Work",
+            workLength = pin.workLength, effort = pin.effort, demands = pin.demands, workSetup = true)
+        val legacy = grouped.copy(id = "legacy", workSetup = false, workPlace = "On site", worth = "Yes")
+        val custom = customActivityTag("Tea Club")
+        val activityPins = mapOf("Visit" to ActivitySetup(duration = "15–60 min", demands = setOf("Thinking")),
+            "Cooking" to ActivitySetup(effort = "Light"),
+            activityTagKey(custom) to ActivitySetup(worth = "Yes", displayTag = custom))
+        val original = sample.copy(activities = listOf(grouped, legacy), prefs = sample.prefs.copy(workPin = pin, activityPins = activityPins))
+        val encoded = Backup.encode(original)
+        assertEquals(original, Backup.decode(encoded))
+        Storage(context, databaseName).use { it.replace(Backup.decode(encoded)) }
+        Storage(context, databaseName).use {
+            assertEquals(original, it.read())
+            val removeVisit = original.copy(prefs = original.prefs.copy(activityPins = activityPins - "Visit"))
+            it.save(original, removeVisit)
+            assertEquals(removeVisit, it.read())
+            assertEquals(removeVisit, Backup.decode(Backup.encode(removeVisit)))
+        }
+
+        val old = JSONObject(encoded).apply {
+            put("version", 4)
+            getJSONObject("prefs").remove("workPin")
+            getJSONObject("prefs").remove("activityPins")
+            for (i in 0..1) getJSONArray("activities").getJSONObject(i).remove("workSetup")
+        }
+        assertEquals(original.copy(activities = listOf(grouped.copy(workSetup = false), legacy), prefs = sample.prefs),
+            Backup.decode(old.toString()))
+
+        fun rejects(change: JSONObject.() -> Unit) {
+            val bad = JSONObject(encoded).apply(change)
+            assertTrue(runCatching { Backup.decode(bad.toString()) }.isFailure)
+        }
+        rejects { getJSONObject("prefs").remove("activityPins") }
+        rejects { getJSONObject("prefs").getJSONObject("activityPins").put("Work", JSONObject()) }
+        rejects { getJSONObject("prefs").getJSONObject("activityPins").getJSONObject("Visit").put("duration", "Unknown") }
+        rejects { getJSONObject("prefs").getJSONObject("activityPins").getJSONObject(activityTagKey(custom)).put("displayTag", "Other · Book Club") }
+        rejects { getJSONObject("prefs").getJSONObject("activityPins").run { put(custom, getJSONObject(activityTagKey(custom))) } }
+        rejects { getJSONObject("prefs").remove("workPin") }
+        rejects { getJSONObject("prefs").getJSONObject("workPin").put("effort", "Unknown") }
+        rejects { getJSONObject("prefs").put("workPin", Backup.encodeWorkSetup(WorkSetup())) }
+        rejects { getJSONArray("activities").getJSONObject(0).getJSONArray("tags").put("Visit") }
+        rejects { getJSONArray("activities").getJSONObject(0).put("duration", "15–60 min") }
+        rejects {
+            val activities = getJSONArray("activities")
+            activities.put(JSONObject(activities.getJSONObject(0).toString()).put("id", "duplicate"))
+        }
     }
 
     @Test fun importsEarlierBackupAndValidatesNewReminderSettings() {
@@ -116,7 +166,7 @@ class StorageBackupTest {
             }
             val missingField = JSONObject(valid).apply { getJSONArray("days").getJSONObject(0).remove("work") }
             val wrongType = JSONObject(valid).apply { getJSONArray("checks").getJSONObject(0).put("energy", "2") }
-            val unsupported = JSONObject(valid).put("version", 5)
+            val unsupported = JSONObject(valid).put("version", 6)
             val badDate = JSONObject(valid).apply { getJSONArray("days").getJSONObject(0).put("date", "2026-02-30") }
             for (damaged in listOf(valid.dropLast(1), valid + "extra", duplicate.toString(), unsupported.toString(),
                 missingField.toString(), wrongType.toString(), badDate.toString())) {

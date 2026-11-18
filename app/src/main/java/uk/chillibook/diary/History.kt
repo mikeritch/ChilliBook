@@ -3,6 +3,7 @@ package uk.chillibook.diary
 import android.app.DatePickerDialog
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
@@ -28,6 +29,25 @@ import kotlinx.coroutines.launch
 
 private fun LocalDate.label(pattern: String): String = format(DateTimeFormatter.ofPattern(pattern))
 
+internal data class HistoryMatch(val date: String, val labels: List<String>)
+
+internal fun historyMatches(diary: Diary, query: String): List<HistoryMatch> {
+    val term = query.trim()
+    if (term.isEmpty()) return emptyList()
+    val days = diary.days.associateBy { it.date }
+    val activities = diary.activities.groupBy { it.date }
+    val checks = diary.checks.groupBy { it.date }
+    return diary.dates().asReversed().mapNotNull { date ->
+        val records = activities[date].orEmpty()
+        val labels = buildSet {
+            addAll(categoryTags.keys.filter { activityFlag(days[date], records, it) == true })
+            records.forEach { addAll(it.tags) }
+            checks[date].orEmpty().forEach { addAll(it.symptoms.keys) }
+        }.filter { it.contains(term, ignoreCase = true) }
+        if (labels.isEmpty()) null else HistoryMatch(date, labels)
+    }
+}
+
 @Composable
 fun HistoryScreen(diary: Diary, open: (String) -> Unit) {
     val today = LocalDate.now()
@@ -37,11 +57,21 @@ fun HistoryScreen(diary: Diary, open: (String) -> Unit) {
     val weekStart = today.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY))
     val list = rememberLazyListState()
     val scope = rememberCoroutineScope()
+    var query by rememberSaveable { mutableStateOf("") }
+    val matches = remember(diary, query) { historyMatches(diary, query) }
+    val searchList = rememberLazyListState()
     val context = LocalContext.current
-    LazyColumn(state=list, modifier=Modifier.fillMaxSize(), contentPadding=PaddingValues(horizontal=20.dp)) {
+    LazyColumn(state=if (query.isBlank()) list else searchList, modifier=Modifier.fillMaxSize(), contentPadding=PaddingValues(horizontal=20.dp)) {
         item {
             TitleArt("History","history")
-            Text(month.atDay(1).label("MMMM yyyy") + "   ⌄",
+            Text("Find a symptom or activity", style=MaterialTheme.typography.bodyMedium)
+            OutlinedTextField(value=query, onValueChange={ query=it }, singleLine=true,
+                modifier=Modifier.fillMaxWidth().semantics { contentDescription = "Find a symptom or activity" },
+                placeholder={ Text("e.g. Headache or Commute") },
+                trailingIcon=if (query.isNotEmpty()) {
+                    { TextButton(onClick={ query="" }) { Text("Clear") } }
+                } else null)
+            if (query.isBlank()) Text(month.atDay(1).label("MMMM yyyy") + "   ⌄",
                 Modifier.clickable(role=Role.Button) {
                     DatePickerDialog(context, { _, year, m, _ ->
                         monthKey = YearMonth.of(year,m+1).toString()
@@ -51,7 +81,17 @@ fun HistoryScreen(diary: Diary, open: (String) -> Unit) {
                     }.show()
                 }.heightIn(min=48.dp).wrapContentHeight(),color=MaterialTheme.colorScheme.onSurfaceVariant)
         }
-        for (number in latest.dayOfMonth downTo 1) {
+        if (query.isNotBlank()) {
+            if (matches.isEmpty()) item { Text("No matching dates.", Modifier.padding(vertical=16.dp)) }
+            items(matches, key={ it.date }) { match ->
+                Column(Modifier.fillMaxWidth().clickable(role=Role.Button) { open(match.date) }
+                    .heightIn(min=64.dp).padding(vertical=10.dp)) {
+                    Text(LocalDate.parse(match.date).label("EEEE, d MMM yyyy"), fontWeight=FontWeight.SemiBold)
+                    Text(match.labels.joinToString(" · "), color=MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                HorizontalDivider()
+            }
+        } else for (number in latest.dayOfMonth downTo 1) {
             val date = month.atDay(number)
             val monday = date.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY))
             if (date == latest || date.dayOfWeek == DayOfWeek.SUNDAY) item(key="week-$monday") {
@@ -144,9 +184,10 @@ fun DateDetail(diary: Diary,date: String,edit:(String)->Unit) {
         for (record in activities) {
             HorizontalDivider()
             Text(record.tags.joinToString(" · "),fontWeight=FontWeight.SemiBold)
-            val details = listOfNotNull(record.workLength,record.workPlace,record.duration,record.effort) + record.demands
+            val details = if (record.workSetup) listOfNotNull(record.workLength, record.effort) + record.demands
+                else listOfNotNull(record.workLength, record.workPlace, record.duration, record.effort) + record.demands
             if(details.isNotEmpty()) Text(details.joinToString(" · "))
-            record.worth?.let { Text("Worthwhile · $it") }
+            if (!record.workSetup) record.worth?.let { Text("Worthwhile · $it") }
         }
         val today = LocalDate.now()
         for ((offset, title) in listOf(-2L to "Two days earlier", -1L to "Previous day",

@@ -61,7 +61,7 @@ class LargeTextFlowTest {
                     picture("symptom")
                     compose.onNodeWithContentDescription("Evening check-in").performScrollTo().performClick()
                     select("How much energy do you have now?", energyLabels.reversed())
-                    select("Work", listOf("No", "Yes"))
+                    select("Did you work?", listOf("No", "Yes"))
                     select("Socialising", listOf("Yes", "No"))
                     select("How did today feel overall?", wellbeingLabels)
                     select("Household tasks", listOf("Yes"))
@@ -73,7 +73,7 @@ class LargeTextFlowTest {
                     picture("settings-dark")
                     compose.onNodeWithText("Restore diary").performScrollTo().assertIsDisplayed()
                     navigation("Today")
-                    compose.onNodeWithText("Work").performScrollTo()
+                    compose.onNodeWithText("Did you work?").performScrollTo()
                     picture("evening-dark")
                     navigation("History")
                     compose.onNodeWithText("This week").assertIsDisplayed()
@@ -87,7 +87,7 @@ class LargeTextFlowTest {
                     compose.onNodeWithContentDescription("Settings").performClick()
                     select("Appearance", listOf("Light"))
                     navigation("Today")
-                    compose.onNodeWithText("Work").performScrollTo().assertIsDisplayed()
+                    compose.onNodeWithText("Did you work?").performScrollTo().assertIsDisplayed()
                 }
             } finally {
                 runBlocking { store.replace(initial) }

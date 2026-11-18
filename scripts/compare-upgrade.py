@@ -7,11 +7,11 @@ from pathlib import Path
 def normalized(path, *, candidate=False):
     with path.open(encoding="utf-8") as stream:
         data = json.load(stream)
-    if data.get("format") != "ChilliBook" or data["version"] not in (1, 2, 3, 4):
+    if data.get("format") != "ChilliBook" or data["version"] not in (1, 2, 3, 4, 5):
         raise ValueError("Unsupported rehearsal export")
     version = data["version"]
-    if candidate and version != 4:
-        raise ValueError("Expected a format 4 export from the updated app")
+    if candidate and version != 5:
+        raise ValueError("Expected a format 5 export from the updated app")
     if version < 3:
         del data["episodes"]
         for day in data["days"]:
@@ -25,7 +25,17 @@ def normalized(path, *, candidate=False):
         del data["prefs"]["pins"]
     elif "pins" in data["prefs"]:
         raise ValueError("Retired symptom pins in format 4 export")
-    data["version"] = 4
+    if version < 5:
+        data["prefs"]["workPin"] = None
+        data["prefs"]["activityPins"] = {}
+        for activity in data["activities"]:
+            activity["workSetup"] = False
+    if data["prefs"]["workPin"] is not None:
+        for field in ("parts", "demands"):
+            data["prefs"]["workPin"][field].sort()
+    for pin in data["prefs"]["activityPins"].values():
+        pin["demands"].sort()
+    data["version"] = 5
     for table, keys in {"days": ("date",), "checks": ("date", "slot"),
                         "activities": ("id",)}.items():
         rows = data[table]

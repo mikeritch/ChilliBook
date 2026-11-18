@@ -33,9 +33,10 @@ internal fun EveningActivities(diary: Diary, date: String, edit: DiaryEdit) {
     var editingId by rememberSaveable { mutableStateOf<String?>(null) }
     var reviewTag by rememberSaveable { mutableStateOf<String?>(null) }
     var recentCustomTags by rememberSaveable { mutableStateOf(arrayListOf<String>()) }
-    val customTags = (diary.activities.flatMap { it.tags } + recentCustomTags)
+    val customTags = (diary.activities.flatMap { it.tags } + diary.prefs.activityPins.values.mapNotNull { it.displayTag } + recentCustomTags)
         .filter { it.startsWith(CUSTOM_ACTIVITY_PREFIX) }.distinctBy(::activityTagKey)
-    val byTag = entries.flatMap { entry -> entry.tags.map { activityTagKey(it) to entry } }
+    val ordinary = entries.filterNot { it.workSetup }
+    val byTag = ordinary.flatMap { entry -> entry.tags.map { activityTagKey(it) to entry } }
         .groupBy({ it.first }, { it.second })
     val presetsByGroup = categoryTags.mapValues { (group, tags) -> tags.filter { it != group } } +
         ("Other" to otherTags + customTags)
@@ -64,6 +65,10 @@ internal fun EveningActivities(diary: Diary, date: String, edit: DiaryEdit) {
         val tagged = entries.filter { entry -> entry.tags.any { it in categoryTags[group].orEmpty() } }
         val answer = activityFlag(day, entries, group)
         Spacer(Modifier.height(22.dp))
+        if (group == "Work") {
+            WorkActivity(diary, date, tagged, edit) { editingId = it }
+            return@forEach
+        }
         if (other) Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             DiaryIcon(R.drawable.diary_sprout, categoryAccent(group))
             Text(title, style = MaterialTheme.typography.titleMedium)
@@ -130,11 +135,11 @@ internal fun EveningActivities(diary: Diary, date: String, edit: DiaryEdit) {
             }) { Text("Undo") } }
         }
         presets.mapNotNull(::simpleEntry).forEach { entry ->
-            key(entry.id) { ActivityDetails(entry, edit) }
+            key(entry.id) { ActivityDetails(entry, group, diary.prefs, edit) }
         }
     }
     val inlineEntries = presetsByGroup.values.flatten().mapNotNull(::simpleEntry).toSet()
-    val legacy = entries.filter { it !in inlineEntries }
+    val legacy = ordinary.filter { it !in inlineEntries && it.tags.none { tag -> tag in categoryTags.getValue("Work") } }
     if (legacy.isNotEmpty()) {
         Text("Recorded activities", style = MaterialTheme.typography.titleMedium)
         legacy.forEachIndexed { i, entry -> DetailLink("${i + 1}. ${entry.activityLabel()}", "Edit") { editingId = entry.id } }
@@ -142,15 +147,15 @@ internal fun EveningActivities(diary: Diary, date: String, edit: DiaryEdit) {
     reviewTag?.let { tag ->
         AlertDialog(onDismissRequest = { reviewTag = null }, title = { Text("Review ${tagLabel(tag)}") },
             text = { Column(Modifier.verticalScroll(rememberScrollState())) {
-                entries.filter { it.hasActivityTag(tag) }.forEachIndexed { i, entry ->
+                ordinary.filter { it.hasActivityTag(tag) }.forEachIndexed { i, entry ->
                     TextButton(onClick = { editingId = entry.id; reviewTag = null }) { Text("${i + 1}. ${entry.activityLabel()}") }
                 }
             } }, confirmButton = { TextButton(onClick = { reviewTag = null }) { Text("Done") } })
     }
-    entries.firstOrNull { it.id == editingId }?.let { entry ->
+    ordinary.firstOrNull { it.id == editingId }?.let { entry ->
         AlertDialog(onDismissRequest = { editingId = null }, title = { Text("Edit activity") },
             text = { Column(Modifier.verticalScroll(rememberScrollState())) {
-                ActivityFields(entry, day, edit) {
+                ActivityFields(entry, day, diary.prefs, edit) {
                     editingId = null
                     remove("Other", entry)
                 }
@@ -159,10 +164,10 @@ internal fun EveningActivities(diary: Diary, date: String, edit: DiaryEdit) {
 }
 
 @Composable
-private fun ActivityDetails(activity: ActivityEntry, edit: DiaryEdit) {
+private fun ActivityDetails(activity: ActivityEntry, group: String, prefs: Prefs, edit: DiaryEdit) {
     Column(Modifier.fillMaxWidth().padding(vertical = 12.dp)
         .background(MaterialTheme.colorScheme.primary.copy(alpha = .07f), RoundedCornerShape(18.dp)).padding(16.dp)) {
-        Text(tagLabel(activity.tags.single()), style = MaterialTheme.typography.titleMedium)
+        ActivityDetailsPin(activity, group, prefs, edit)
         Text("Optional details", style = MaterialTheme.typography.bodySmall)
         DetailChoices(activity) { change ->
             edit { diary -> diary.copy(activities = diary.activities.map { if (it.id == activity.id) change(it) else it }) }
@@ -171,7 +176,24 @@ private fun ActivityDetails(activity: ActivityEntry, edit: DiaryEdit) {
 }
 
 @Composable
-private fun ActivityFields(activity: ActivityEntry, day: Day?, edit: DiaryEdit, removeEntry: () -> Unit) {
+private fun ActivityDetailsPin(activity: ActivityEntry, group: String, prefs: Prefs, edit: DiaryEdit) {
+    val tag = activity.tags.single()
+    val pinKey = activityTagKey(tag)
+    val setup = activity.activitySetup()
+    val pin = prefs.activityPins[pinKey]
+    key(setup) {
+        ActivityPinHeader(tagLabel(tag), tagLabel(tag), categoryAccent(group),
+            hasDetails = setup.hasSupportedDetails(), matches = setup == pin?.copy(displayTag = null),
+            summary = pin?.let { saved -> (listOfNotNull(saved.duration, saved.effort) + saved.demands.sorted() +
+                listOfNotNull(saved.worth?.let { "Worthwhile · $it" })).joinToString(" · ") },
+            save = { edit { it.saveActivityPin(activity.id, tag) } },
+            apply = { edit { it.applyActivityPin(activity.id, tag) } },
+            unpin = { edit { d -> d.copy(prefs = d.prefs.copy(activityPins = d.prefs.activityPins - pinKey)) } })
+    }
+}
+
+@Composable
+private fun ActivityFields(activity: ActivityEntry, day: Day?, prefs: Prefs, edit: DiaryEdit, removeEntry: () -> Unit) {
     var conflict by rememberSaveable { mutableStateOf<String?>(null) }
     var remove by rememberSaveable { mutableStateOf(false) }
     fun update(change: (ActivityEntry) -> ActivityEntry) {
@@ -186,6 +208,12 @@ private fun ActivityFields(activity: ActivityEntry, day: Day?, edit: DiaryEdit, 
             if (tag !in activity.tags && category in categoryTags && day?.flag(category) == false) conflict = tag
             else toggle(tag)
         }
+    }
+    val single = activity.tags.singleOrNull()
+    if (single != null) {
+        val group = categoryTags.entries.firstOrNull { single in it.value && it.key != single }?.key
+            ?: "Other".takeIf { single in otherTags || single.startsWith(CUSTOM_ACTIVITY_PREFIX) }
+        if (group != null && group != "Work") ActivityDetailsPin(activity, group, prefs, edit)
     }
     DetailChoices(activity, ::update)
     TextButton(onClick = { remove = true }) { Text("Remove activity") }
@@ -225,7 +253,7 @@ private fun ActivityChoice(label: String, choices: List<String>, selected: Strin
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun ActivityChips(label: String, choices: List<String>, selected: Set<String>, toggle: (String) -> Unit) {
+internal fun ActivityChips(label: String, choices: List<String>, selected: Set<String>, toggle: (String) -> Unit) {
     Spacer(Modifier.height(14.dp))
     Text(label, style = MaterialTheme.typography.titleSmall)
     Spacer(Modifier.height(6.dp))

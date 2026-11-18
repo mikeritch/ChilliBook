@@ -47,8 +47,53 @@ object Backup {
     private fun set(values: Set<String>) = JSONArray(values.sorted())
     private fun <T> rows(values: List<T>, encode: (T) -> JSONObject) = JSONArray(values.map(encode))
 
+    internal fun encodeActivityPins(pins: Map<String, ActivitySetup>) = JSONObject().apply {
+        for ((key, pin) in pins) put(key, obj(
+            "duration" to pin.duration, "effort" to pin.effort, "demands" to set(pin.demands),
+            "worth" to pin.worth, "displayTag" to pin.displayTag
+        ))
+    }
+
+    internal fun decodeActivityPins(values: JSONObject): Map<String, ActivitySetup> =
+        values.keys().asSequence().associateWith { key ->
+            val pin = values.getJSONObject(key).run {
+                require(keys().asSequence().toSet() == setOf("duration", "effort", "demands", "worth", "displayTag"))
+                ActivitySetup(text("duration"), text("effort"), strings("demands"), text("worth"), text("displayTag"))
+            }
+            if (key.startsWith(CUSTOM_ACTIVITY_PREFIX)) {
+                val tag = requireNotNull(pin.displayTag)
+                require(tag.startsWith(CUSTOM_ACTIVITY_PREFIX) && activityTagKey(tag) == key)
+                require(customActivityTag(tag.removePrefix(CUSTOM_ACTIVITY_PREFIX)) == tag)
+            } else {
+                require(pin.displayTag == null)
+                require(key in otherTags || categoryTags.any { (category, tags) ->
+                    category != "Work" && key != category && key in tags
+                })
+            }
+            require(pin.hasSupportedDetails())
+            pin
+        }
+
+    internal fun encodeWorkSetup(setup: WorkSetup) = obj(
+        "parts" to set(setup.parts), "workLength" to setup.workLength,
+        "effort" to setup.effort, "demands" to set(setup.demands)
+    )
+
+    internal fun decodeWorkSetup(value: JSONObject): WorkSetup = value.run {
+        require(keys().asSequence().toSet() == setOf("parts", "workLength", "effort", "demands"))
+        validate(WorkSetup(strings("parts"), text("workLength"), text("effort"), strings("demands"))).also {
+            require(it != WorkSetup())
+        }
+    }
+
+    private fun validate(setup: WorkSetup): WorkSetup = setup.apply {
+        require(parts.all { it != "Work" && it in categoryTags.getValue("Work") })
+        require(workLength == null || workLength in setOf("Part day", "Full day"))
+        require(supportedEffortAndDemands(effort, demands))
+    }
+
     fun encode(diary: Diary): String = obj(
-        "format" to "ChilliBook", "version" to 4,
+        "format" to "ChilliBook", "version" to 5,
         "days" to rows(diary.days) { d -> obj(
             "date" to d.date, "work" to d.work, "social" to d.social, "household" to d.household,
             "wellbeing" to d.wellbeing, "impact" to d.impact, "context" to set(d.context),
@@ -61,10 +106,13 @@ object Backup {
         "activities" to rows(diary.activities) { a -> obj(
             "id" to a.id, "date" to a.date, "tags" to set(a.tags), "duration" to a.duration,
             "effort" to a.effort, "demands" to set(a.demands), "worth" to a.worth,
-            "workLength" to a.workLength, "workPlace" to a.workPlace, "at" to a.at, "zone" to a.zone
+            "workLength" to a.workLength, "workPlace" to a.workPlace, "at" to a.at, "zone" to a.zone,
+            "workSetup" to a.workSetup
         ) },
         "prefs" to obj("id" to diary.prefs.id, "theme" to diary.prefs.theme,
-            "morningReminder" to diary.prefs.morningReminder, "eveningReminder" to diary.prefs.eveningReminder)
+            "morningReminder" to diary.prefs.morningReminder, "eveningReminder" to diary.prefs.eveningReminder,
+            "workPin" to diary.prefs.workPin?.let(::encodeWorkSetup),
+            "activityPins" to encodeActivityPins(diary.prefs.activityPins))
     ).let { root ->
         Values().checkTree(root)
         root.toString(2).also { if (it.length > MAX_CHARACTERS) throw LimitExceeded() }
@@ -128,7 +176,7 @@ object Backup {
             result
         }
         val version = root.get("version") as Int
-        require(root.string("format") == "ChilliBook" && version in 1..4)
+        require(root.string("format") == "ChilliBook" && version in 1..5)
         val days = root.records("days", Day::date) {
             Day(date("date"), bool("work"), bool("social"), bool("household"), level("wellbeing", 0..4),
                 text("impact"), strings("context"), instant(), zone())
@@ -143,16 +191,26 @@ object Backup {
             require(slot == "am" || sleep == null)
             Check(date("date"), slot, level("energy", 0..4), sleep, symptoms, instant(), zone())
         }
+        val groupedDates = mutableSetOf<String>()
         val activities = root.records("activities", ActivityEntry::id) {
             ActivityEntry(string("id"), date("date"), strings("tags"), text("duration"), text("effort"),
-                strings("demands"), text("worth"), text("workLength"), text("workPlace"), instant(), zone())
+                strings("demands"), text("worth"), text("workLength"), text("workPlace"), instant(), zone(),
+                workSetup = version >= 5 && get("workSetup") as Boolean).also { entry ->
+                if (entry.workSetup) {
+                    require(groupedDates.add(entry.date) && "Work" in entry.tags)
+                    require(entry.duration == null && entry.worth == null && entry.workPlace == null)
+                    validate(WorkSetup(entry.tags - "Work", entry.workLength, entry.effort, entry.demands))
+                }
+            }
         }
         val prefs = root.getJSONObject("prefs").run {
             require(get("id") == 1)
             val theme = string("theme").also { require(it in setOf("system", "light", "dark")) }
             Prefs(1, theme,
                 morningReminder = if (version >= 2) level("morningReminder", 0..1439) else null,
-                eveningReminder = if (version >= 2) level("eveningReminder", 0..1439) else null)
+                eveningReminder = if (version >= 2) level("eveningReminder", 0..1439) else null,
+                workPin = if (version >= 5) optional("workPin")?.let { decodeWorkSetup(it as JSONObject) } else null,
+                activityPins = if (version >= 5) decodeActivityPins(getJSONObject("activityPins")) else emptyMap())
         }
         return Diary(days, checks, activities, prefs)
     }

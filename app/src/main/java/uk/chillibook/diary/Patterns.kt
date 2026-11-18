@@ -249,7 +249,11 @@ fun PatternsScreen(diary: Diary, onDate: (String) -> Unit, onToday: () -> Unit) 
                                     "Morning · ${symptomRatingLabel(index.metric(date, "am", lookup))}\n" +
                                         "Evening · ${symptomRatingLabel(index.metric(date, "pm", lookup))}"
                                 } else {
-                                    "Worthwhile · ${entries.joinToString(", ") { it.worth ?: "Unanswered" }}"
+                                    entries.joinToString("\n") { entry ->
+                                        if (entry.workSetup) (listOf("Work") + listOfNotNull(entry.workLength, entry.effort) +
+                                            entry.demands.sorted()).joinToString(" · ")
+                                        else "Worthwhile · ${entry.worth ?: "Unanswered"}"
+                                    }
                                 }
                                 DateRow(date, "Wellbeing · ${wellbeingLabels.value(index.days[day]?.wellbeing)}\n" +
                                     "Next morning · ${energyLabels.value(index.metric(date.plusDays(1), "am", null))}\n" +

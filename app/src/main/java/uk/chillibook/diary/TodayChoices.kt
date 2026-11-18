@@ -85,12 +85,18 @@ internal fun AnswerTile(question: String, label: String, active: Boolean, modifi
                         rank: Int? = null, compact: Boolean = false, accent: Color? = null, onClick: () -> Unit) {
     val colors = MaterialTheme.colorScheme
     val tone = accent ?: colors.primary
-    val ink = if (active) (if (tone.luminance() > .36f) Color(0xFF192421) else Color.White) else colors.onSurface
     val shape = RoundedCornerShape(12.dp)
     val interactions = remember { MutableInteractionSource() }
     val pressed by interactions.collectIsPressedAsState()
     val shrink = selectionScale(active, pressed)
-    val fill = if (active) tone else tone.copy(alpha = if (accent != null) .13f else .06f).compositeOver(colors.surface)
+    val pastel = accent != null && colors.background.luminance() > .5f && tone.luminance() > .36f
+    val fill = when {
+        active && accent == null && colors.background.luminance() > .5f -> colors.primaryContainer
+        active -> tone
+        else -> tone.copy(alpha = if (pastel) .40f else if (accent != null) .13f else .06f).compositeOver(colors.surface)
+    }
+    val ink = if (active && fill.luminance() <= .36f) Color.White else if (active) Color(0xFF192421) else colors.onSurface
+    val edge = if (pastel && active) ink.copy(alpha = .45f) else if (active) tone else tone.copy(alpha = .22f)
     val background by animateColorAsState(if (pressed) ink.copy(alpha = .18f).compositeOver(fill) else fill,
         tween(120), label = "answer fill")
     Box(modifier.clip(shape)
@@ -98,7 +104,7 @@ internal fun AnswerTile(question: String, label: String, active: Boolean, modifi
             role = Role.RadioButton, onClick = onClick)
         .semantics { contentDescription = "$question, $label" }
         .graphicsLayer { scaleX = shrink; scaleY = shrink }.background(background, shape)
-        .border(1.dp, if (active) tone else tone.copy(alpha = .22f), shape)
+        .border(if (pastel && active) 2.dp else 1.dp, edge, shape)
         .heightIn(min = if (rank == null) 48.dp else 68.dp),
         contentAlignment = Alignment.Center) {
         Column(Modifier.padding(horizontal = if (compact) 3.dp else 12.dp, vertical = 9.dp),
@@ -107,7 +113,7 @@ internal fun AnswerTile(question: String, label: String, active: Boolean, modifi
                 Canvas(Modifier.size(28.dp, 12.dp)) {
                     for (i in 0..4) {
                         val h = size.height * (0.22f + i * 0.17f)
-                        drawRoundRect(if (i <= rank) (if (active) ink else tone) else tone.copy(alpha = .25f),
+                        drawRoundRect(if (i <= rank) (if (active || pastel) ink else tone) else tone.copy(alpha = .25f),
                             Offset(i * size.width / 5, size.height - h), Size(size.width / 7, h), CornerRadius(1.dp.toPx()))
                     }
                 }
