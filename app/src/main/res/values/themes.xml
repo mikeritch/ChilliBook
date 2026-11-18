@@ -1,0 +1,1 @@
+<resources><style name="DiaryTheme" parent="android:style/Theme.Material.Light.NoActionBar"><item name="android:windowLightStatusBar">true</item><item name="android:colorAccent">#28665B</item><item name="android:windowBackground">#FAF7F1</item></style></resources>

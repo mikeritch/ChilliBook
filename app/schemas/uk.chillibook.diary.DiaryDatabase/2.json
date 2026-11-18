@@ -1,0 +1,303 @@
+{
+  "formatVersion": 1,
+  "database": {
+    "version": 2,
+    "identityHash": "16cb837a187a04ea404aade685223c59",
+    "entities": [
+      {
+        "tableName": "days",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`date` TEXT NOT NULL, `work` INTEGER, `social` INTEGER, `household` INTEGER, `wellbeing` INTEGER, `impact` TEXT, `context` TEXT NOT NULL, `workOff` TEXT, `at` TEXT NOT NULL, `zone` TEXT NOT NULL, PRIMARY KEY(`date`))",
+        "fields": [
+          {
+            "fieldPath": "date",
+            "columnName": "date",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "work",
+            "columnName": "work",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "social",
+            "columnName": "social",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "household",
+            "columnName": "household",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "wellbeing",
+            "columnName": "wellbeing",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "impact",
+            "columnName": "impact",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "context",
+            "columnName": "context",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "workOff",
+            "columnName": "workOff",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "at",
+            "columnName": "at",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "zone",
+            "columnName": "zone",
+            "affinity": "TEXT",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "date"
+          ]
+        }
+      },
+      {
+        "tableName": "checks",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`date` TEXT NOT NULL, `slot` TEXT NOT NULL, `energy` INTEGER, `sleep` INTEGER, `symptoms` TEXT NOT NULL, `at` TEXT NOT NULL, `zone` TEXT NOT NULL, PRIMARY KEY(`date`, `slot`))",
+        "fields": [
+          {
+            "fieldPath": "date",
+            "columnName": "date",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "slot",
+            "columnName": "slot",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "energy",
+            "columnName": "energy",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "sleep",
+            "columnName": "sleep",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "symptoms",
+            "columnName": "symptoms",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "at",
+            "columnName": "at",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "zone",
+            "columnName": "zone",
+            "affinity": "TEXT",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "date",
+            "slot"
+          ]
+        }
+      },
+      {
+        "tableName": "activities",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `date` TEXT NOT NULL, `tags` TEXT NOT NULL, `duration` TEXT, `effort` TEXT, `demands` TEXT NOT NULL, `worth` TEXT, `workLength` TEXT, `workPlace` TEXT, `at` TEXT NOT NULL, `zone` TEXT NOT NULL, PRIMARY KEY(`id`))",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "date",
+            "columnName": "date",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "tags",
+            "columnName": "tags",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "duration",
+            "columnName": "duration",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "effort",
+            "columnName": "effort",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "demands",
+            "columnName": "demands",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "worth",
+            "columnName": "worth",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "workLength",
+            "columnName": "workLength",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "workPlace",
+            "columnName": "workPlace",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "at",
+            "columnName": "at",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "zone",
+            "columnName": "zone",
+            "affinity": "TEXT",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        }
+      },
+      {
+        "tableName": "episodes",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `start` TEXT NOT NULL, `end` TEXT, `approxStart` INTEGER NOT NULL, `approxEnd` INTEGER NOT NULL, `worst` TEXT, `at` TEXT NOT NULL, `zone` TEXT NOT NULL, PRIMARY KEY(`id`))",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "start",
+            "columnName": "start",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "end",
+            "columnName": "end",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "approxStart",
+            "columnName": "approxStart",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "approxEnd",
+            "columnName": "approxEnd",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "worst",
+            "columnName": "worst",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "at",
+            "columnName": "at",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "zone",
+            "columnName": "zone",
+            "affinity": "TEXT",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        }
+      },
+      {
+        "tableName": "prefs",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER NOT NULL, `theme` TEXT NOT NULL, `pins` TEXT NOT NULL, `morningReminder` INTEGER, `eveningReminder` INTEGER, PRIMARY KEY(`id`))",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "theme",
+            "columnName": "theme",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "pins",
+            "columnName": "pins",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "morningReminder",
+            "columnName": "morningReminder",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "eveningReminder",
+            "columnName": "eveningReminder",
+            "affinity": "INTEGER"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        }
+      }
+    ],
+    "setupQueries": [
+      "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '16cb837a187a04ea404aade685223c59')"
+    ]
+  }
+}
