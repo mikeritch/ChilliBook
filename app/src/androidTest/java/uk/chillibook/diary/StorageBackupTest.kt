@@ -32,7 +32,7 @@ class StorageBackupTest {
         val check = morning.copy(symptoms = mapOf("Brain fog" to UNRATED_SYMPTOM, "Headache" to 0))
         val original = sample.copy(checks = listOf(check))
         val backup = JSONObject(Backup.encode(original))
-        assertEquals(5, backup.getInt("version"))
+        assertEquals(6, backup.getInt("version"))
         assertFalse(backup.getJSONObject("prefs").has("pins"))
         assertFalse(backup.has("episodes"))
         assertFalse(backup.getJSONArray("days").getJSONObject(0).has("workOff"))
@@ -106,6 +106,42 @@ class StorageBackupTest {
         }
     }
 
+    @Test fun historicalQuietRestAndNewEpisodesRoundTripWithoutInventingDetails() {
+        val quiet = ActivityEntry("old", morning.date, setOf("Quiet rest", "Walking"), duration = "Over an hour",
+            effort = "Moderate", demands = setOf("Thinking"), worth = "Mixed", at = at, zone = zone)
+        val original = sample.copy(activities = listOf(quiet, quiet.copy(id = "old2", effort = "Light")),
+            prefs = Prefs(activityPins = mapOf("Quiet rest" to ActivitySetup(effort = "Light"))))
+        val v5 = JSONObject(Backup.encode(original)).apply {
+            put("version", 5)
+            getJSONArray("days").getJSONObject(0).remove("noRests")
+            for (i in 0..1) getJSONArray("activities").getJSONObject(i).apply {
+                remove("restKind")
+                remove("restPeriod")
+                remove("restEnergy")
+            }
+        }
+        assertEquals(original, Backup.decode(v5.toString()))
+        val episodes = restKinds.mapIndexed { i, kind ->
+            ActivityEntry("new$i", morning.date, setOf(kind), restKind = kind, at = at, zone = zone)
+        }
+        val noRest = original.days.single().copy(date = "2026-11-16", noRests = true)
+        val detailed = episodes.first().copy(id = "more", duration = restDurations.first(),
+            restPeriod = restPeriods.first(), restEnergy = restEnergies.first())
+        val current = original.copy(activities = original.activities + episodes + detailed, days = original.days + noRest)
+        assertEquals(current, Backup.decode(Backup.encode(current)))
+        fun rejects(change: JSONObject.() -> Unit) {
+            val invalid = JSONObject(Backup.encode(current)).apply(change)
+            assertTrue(runCatching { Backup.decode(invalid.toString()) }.isFailure)
+        }
+        rejects { getJSONArray("days").getJSONObject(0).put("noRests", true) }
+        rejects { getJSONArray("days").getJSONObject(0).put("noRests", false) }
+        rejects { getJSONArray("activities").getJSONObject(0).put("restPeriod", restPeriods.first()) }
+        for (key in listOf("restKind", "duration", "restPeriod", "restEnergy", "effort", "workPlace", "workLength", "worth")) {
+            rejects { getJSONArray("activities").getJSONObject(2).put(key, "invalid") }
+        }
+        rejects { getJSONArray("activities").getJSONObject(2).getJSONArray("tags").put("Walking") }
+    }
+
     @Test fun importsEarlierBackupAndValidatesNewReminderSettings() {
         val configured = sample.copy(prefs = sample.prefs.copy(morningReminder = 0, eveningReminder = 1439))
         val current = Backup.encode(configured)
@@ -146,9 +182,9 @@ class StorageBackupTest {
     @Test fun missingNullableFieldIsDistinctFromExplicitNull() {
         val backup = Backup.encode(sample.copy(activities = listOf(ActivityEntry(date = morning.date))))
         val fields = mapOf(
-            "days" to listOf("work", "social", "household", "wellbeing", "impact"),
+            "days" to listOf("work", "social", "household", "wellbeing", "impact", "noRests"),
             "checks" to listOf("energy", "sleep"),
-            "activities" to listOf("duration", "effort", "worth", "workLength", "workPlace")
+            "activities" to listOf("duration", "effort", "worth", "workLength", "workPlace", "restKind", "restPeriod", "restEnergy")
         )
         for ((table, names) in fields) for (name in names) {
             val incomplete = JSONObject(backup)
@@ -166,7 +202,7 @@ class StorageBackupTest {
             }
             val missingField = JSONObject(valid).apply { getJSONArray("days").getJSONObject(0).remove("work") }
             val wrongType = JSONObject(valid).apply { getJSONArray("checks").getJSONObject(0).put("energy", "2") }
-            val unsupported = JSONObject(valid).put("version", 6)
+            val unsupported = JSONObject(valid).put("version", 7)
             val badDate = JSONObject(valid).apply { getJSONArray("days").getJSONObject(0).put("date", "2026-02-30") }
             for (damaged in listOf(valid.dropLast(1), valid + "extra", duplicate.toString(), unsupported.toString(),
                 missingField.toString(), wrongType.toString(), badDate.toString())) {

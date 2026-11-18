@@ -46,19 +46,33 @@ class TodayFlowTest {
         compose.onNodeWithContentDescription(label).performScrollTo().performClick()
     }
 
-    private fun chooseYesterday() {
+    private fun chooseDate(from: LocalDate, to: LocalDate) {
         val format = DateTimeFormatter.ofPattern("EEEE, d MMM", Locale.getDefault())
-        tap("${today.format(format)}   ⌄")
+        tap("${from.format(format)}   ⌄")
         InstrumentationRegistry.getInstrumentation().runOnMainSync {
             val picker = WindowInspector.getGlobalWindowViews().asSequence()
                 .filterIsInstance<ViewGroup>().flatMap { it.descendants }.filterIsInstance<DatePicker>().single()
-            picker.updateDate(yesterday.year, yesterday.monthValue - 1, yesterday.dayOfMonth)
+            picker.updateDate(to.year, to.monthValue - 1, to.dayOfMonth)
             picker.rootView.findViewById<View>(android.R.id.button1).performClick()
         }
     }
 
     private fun awaitStored(store: Storage, condition: (Diary) -> Boolean) {
         compose.waitUntil(10_000) { condition(runBlocking { store.read() }) }
+    }
+
+    @SdkSuppress(minSdkVersion = 29)
+    @Test fun calendarChangesDateAndKeepsTheEveningSlot() {
+        ActivityScenario.launch(MainActivity::class.java).use {
+            slot(morning = false)
+            compose.onNodeWithText("Yesterday").assertDoesNotExist()
+            chooseDate(today, yesterday)
+            compose.onNodeWithContentDescription("Evening check-in").assertIsSelected()
+            chooseDate(yesterday, today)
+            val format = DateTimeFormatter.ofPattern("EEEE, d MMM", Locale.getDefault())
+            compose.onNodeWithText("${today.format(format)}   ⌄").assertIsDisplayed()
+            compose.onNodeWithContentDescription("Evening check-in").assertIsSelected()
+        }
     }
 
     @Test fun holdingAnAnswerChangesItsFillWithoutMovingOrSelectingIt() {
@@ -180,7 +194,7 @@ class TodayFlowTest {
                     slot(morning = false)
                     press("Pin these work details")
                     press("Pin these Cooking details")
-                    tap("Yesterday")
+                    chooseDate(today, yesterday)
                     select("Did you work?", "Yes")
                     press("Open pinned work setup")
                     tap("Use for this day")
@@ -235,7 +249,7 @@ class TodayFlowTest {
                     select("How did today feel overall?", "Fairly well")
                     awaitStored(store) { data -> data.days.any { it.date == today.toString() &&
                         it.wellbeing == null && it.work == false && it.social == true } }
-                    chooseYesterday()
+                    chooseDate(today, yesterday)
                     slot(morning = true)
                     select(energyQuestion, "Medium")
                     select(energyQuestion, "High")

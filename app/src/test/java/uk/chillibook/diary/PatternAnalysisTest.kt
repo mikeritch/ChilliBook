@@ -29,21 +29,13 @@ class PatternAnalysisTest {
         assertNull(index.metric(monday.plusDays(1), "am", null))
     }
 
-    @Test fun frequenciesCountCalendarDatesAndPreserveMissingRatings() {
+    @Test fun symptomFrequenciesPreserveMissingRatings() {
         val mid = monday.plusDays(1)
         val index = PatternIndex(Diary(
-            days = listOf(Day(mid.toString(), social = false)),
-            activities = listOf(monday, monday, wednesday.plusDays(1)).map {
-                ActivityEntry(date = it.toString(), tags = setOf("Call"))
-            },
             checks = listOf(Check(monday.toString(), "am", symptoms = mapOf("Headache" to 0)),
                 Check(mid.toString(), "am", energy = 1, symptoms = mapOf("Headache" to UNRATED_SYMPTOM)),
                 Check(wednesday.toString(), "pm", symptoms = mapOf("Headache" to 3)))
         ))
-        val social = index.activityDates(monday, wednesday, "Socialising")
-        assertEquals(mapOf(true to listOf(monday), false to listOf(mid), null to listOf(wednesday)), social)
-        assertEquals(mapOf(true to listOf(monday), null to listOf(mid, wednesday)),
-            index.activityDates(monday, wednesday, "Call"))
         val ratings = index.monthly(monday, wednesday, "Headache", 4).getValue(YearMonth.from(monday)).getValue("am")
         assertEquals(2, ratings.recorded)
         assertEquals(1, ratings.unrated)
@@ -52,20 +44,6 @@ class PatternAnalysisTest {
             index.symptomDates(monday, wednesday, "Headache", "am"))
         assertEquals(mapOf(3 to listOf(wednesday), null to listOf(monday, mid)),
             index.symptomDates(monday, wednesday, "Headache", "pm"))
-    }
-
-    @Test fun crossActivityCountsIncludeLegacyAndCustomTagsOncePerDay() {
-        val name = customActivityTag("Garden")
-        val index = PatternIndex(Diary(days = listOf(Day(wednesday.toString(), work = false)), activities = listOf(
-            ActivityEntry(date = monday.toString(), tags = setOf("Meetings", "Call", name)),
-            ActivityEntry(date = monday.toString(), tags = setOf("Work", customActivityTag("garden"))),
-            ActivityEntry(date = wednesday.toString(), tags = setOf(customActivityTag("GARDEN"))),
-            ActivityEntry(date = wednesday.plusDays(1).toString(), tags = setOf("Work"))
-        )))
-        val names = listOf("Work", "Meetings", "Socialising", "Call", name, "Household")
-        val counts = index.activityCounts(monday, wednesday, names)
-        assertEquals(listOf(1, 1, 1, 1, 2, 0), names.map(counts::getValue))
-        names.forEach { assertEquals(counts[it], index.activityDates(monday, wednesday, it)[true].orEmpty().size) }
     }
 
     @Test fun incompleteAndFutureFollowUpsAreExcludedUntilEligible() {

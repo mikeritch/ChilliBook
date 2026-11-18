@@ -31,18 +31,7 @@ fun TodayScreen(diary: Diary, date: String, slot: String, onDate: (String) -> Un
     Column(Modifier.fillMaxSize().padding(horizontal = 20.dp)) {
         Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(scroll)) {
             TitleArt(title, slot)
-            val prettyDate = LocalDate.parse(date).format(DateTimeFormatter.ofPattern("EEEE, d MMM", Locale.getDefault()))
-            val isToday = date == LocalDate.now().toString()
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("$prettyDate   ⌄", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.weight(1f).clickable(role = Role.Button) { chooseDiaryDate(context, date, chosen = onDate) }
-                        .heightIn(min = 48.dp).wrapContentHeight())
-                TextButton(onClick = {
-                    val today = LocalDate.now()
-                    onDate((if (date == today.toString()) today.minusDays(1) else today).toString())
-                }) { Text(if (isToday) "Yesterday" else "Today") }
-            }
+            CheckInDateSelector(date) { chooseDiaryDate(context, date, chosen = onDate) }
             SlotSwitch(slot, onSlot)
             Spacer(Modifier.height(22.dp))
             val energyQuestion = "How much energy do you have now?"
@@ -75,6 +64,14 @@ fun TodayScreen(diary: Diary, date: String, slot: String, onDate: (String) -> Un
         }
         SaveNotice(status, retry)
     }
+}
+
+@Composable
+private fun CheckInDateSelector(date: String, openCalendar: () -> Unit) {
+    val prettyDate = LocalDate.parse(date).format(DateTimeFormatter.ofPattern("EEEE, d MMM", Locale.getDefault()))
+    Text("$prettyDate   ⌄", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.clickable(role = Role.Button, onClickLabel = "Choose date", onClick = openCalendar)
+            .heightIn(min = 48.dp).wrapContentHeight())
 }
 
 @Composable

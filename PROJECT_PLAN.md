@@ -2,7 +2,7 @@
 
 A private diary for one person balancing mild-to-moderate ME/CFS with work, socialising and household life. In the morning it should take two taps to say how the night went and how much energy is available. In the evening it should be just as easy to record a good visit with a friend as a difficult day at work. Months later, the person should be able to see what they enjoyed, what they could manage and how they felt afterwards.
 
-The original design reference and milestone descriptions document the first release. The current 1.6 changes are specified below.
+The original design reference and milestone descriptions document the first release. Later sections describe changes through 1.7.
 
 The **first release** is a privately installed Android app with offline check-ins, editable history, personal charts and a restorable backup. The two check-ins and emphasis on ordinary working life are the owner's choices. The labels, timings and visual palette below are starting points to try on their phone.
 
@@ -186,3 +186,21 @@ Work Yes saves on its own. On the same screen, optionally select Commute, Meetin
 Keep historical activities and their individual settings, durations and worthwhile answers accessible. Room schema 5 marks newly grouped work entries and adds preferences for the Work pin and the individual activity pins. Backup format 5 includes both additions and reads formats 1–4. Keep the original IDs, diary dates, timestamps, fields and mixed tags during migration.
 
 Place Yesterday beside the date on both check-ins and offer Today when backfilling. History searches recorded symptoms, activities and positive category answers across all months. Use cool lavender pages with pastel rose, periwinkle and mint controls in light mode. Show a roomy outline bolt with two eyes and a smile in the energy question.
+
+## Activity frequency grid
+
+Group related activities in rows and count distinct local diary dates in each column. Use daily columns for seven days, four successive weeks for the 28-day range, and calendar months for longer spans. The first and last columns respect the selected date limits. A dash means the period has no diary entries. Zero means the diary has coverage but the activity was never recorded there. Preserve explicit category No answers.
+
+Selecting a count opens its dates directly under the activity row. For each date show evening wellbeing and energy on the next two calendar mornings, including mornings outside the selected week or month. Distinguish missing answers from future dates. A date opens its History entry.
+
+## Date switching and day completion
+
+Tap the displayed date beneath Morning or Evening to open the calendar. Choosing a date keeps the current check-in slot.
+
+When a saved edit completes both check-ins, celebrate with a silent, full-screen flower bloom, sparkles and falling petals. Let taps pass through the effect. Leave the open flower and thank-you in the check-in header until the next local calendar day, even after closing the app. An explicit No counts and backfilling earns the reward on the day of the edit. Reopening shows the earned flower without replaying the burst. With animations disabled, go directly to the open flower. Keep this display state local to the installation and clear it on reset or restore. No diary or backup schema migration is needed.
+
+## Rest and naps · 1.7
+
+Place Rest & naps after Socialising and before Other. Each tap of Add rest or Add nap immediately records a separate episode. Open its optional time of day, duration and energy afterwards inline. Allow correcting the type, changing or clearing details, removing one episode, and undoing removal. An explicit day without rests is an evening answer. An unanswered day stays unknown.
+
+Show original Quiet rest entries alongside new episodes. Preserve their IDs, timestamps, mixed tags, repeated entries, original duration ranges, effort, demands, worthwhile answers and saved setups. Room schema 6 adds nullable fields and leaves the original rows intact. Backup format 6 reads earlier versions. History shows individual episodes; the activity frequency grid counts distinct dates.

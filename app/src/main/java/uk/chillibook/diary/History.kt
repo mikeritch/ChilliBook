@@ -41,6 +41,7 @@ internal fun historyMatches(diary: Diary, query: String): List<HistoryMatch> {
         val records = activities[date].orEmpty()
         val labels = buildSet {
             addAll(categoryTags.keys.filter { activityFlag(days[date], records, it) == true })
+            if (term.equals(REST_GROUP, ignoreCase = true) && restRecorded(days[date], records) == true) add(REST_GROUP)
             records.forEach { addAll(it.tags) }
             checks[date].orEmpty().forEach { addAll(it.symptoms.keys) }
         }.filter { it.contains(term, ignoreCase = true) }
@@ -134,7 +135,8 @@ private fun HistoryRow(diary: Diary,date: LocalDate, open: () -> Unit) {
                 else Row(Modifier.fillMaxWidth()) {
                     Box(Modifier.weight(1f)) { SlotLabel("am") }; Box(Modifier.weight(1f)) { SlotLabel("pm") }
                 }
-                val labels = (categories + activities.flatMap { it.tags }.filter { it !in categories }).distinct()
+                val labels = (categories + activities.flatMap { it.tags } +
+                    listOfNotNull("No rests or naps".takeIf { restRecorded(day, activities) == false })).distinct()
                 if (labels.isNotEmpty()) Row(verticalAlignment=Alignment.CenterVertically) {
                     val icon = when(categories.firstOrNull()) { "Work" -> R.drawable.work_bag; "Socialising" -> R.drawable.cups; "Household" -> R.drawable.house; else -> R.drawable.symbook }
                     Icon(painterResource(icon),null,Modifier.size(16.dp),tint=colors.onSurfaceVariant)
@@ -177,6 +179,12 @@ fun DateDetail(diary: Diary,date: String,edit:(String)->Unit) {
                     val answer = when(activityFlag(day,activities,name)) { true -> "Yes"; false -> "No"; null -> "Unanswered" }
                     Text("$name · $answer")
                 }
+                val restAnswer = when (restRecorded(day, activities)) {
+                    true -> "Yes"
+                    false -> "No"
+                    null -> "Unanswered"
+                }
+                Text("$REST_GROUP · $restAnswer")
                 day?.impact?.let { Text("Recorded change to plans · $it") }
                 day?.context.orEmpty().forEach { Text(it) }
             }
@@ -184,7 +192,9 @@ fun DateDetail(diary: Diary,date: String,edit:(String)->Unit) {
         for (record in activities) {
             HorizontalDivider()
             Text(record.tags.joinToString(" · "),fontWeight=FontWeight.SemiBold)
-            val details = if (record.workSetup) listOfNotNull(record.workLength, record.effort) + record.demands
+            val details = if (record.restKind != null) listOfNotNull(record.restPeriod, record.duration,
+                record.restEnergy?.let { "Energy afterwards · $it" })
+                else if (record.workSetup) listOfNotNull(record.workLength, record.effort) + record.demands
                 else listOfNotNull(record.workLength, record.workPlace, record.duration, record.effort) + record.demands
             if(details.isNotEmpty()) Text(details.joinToString(" · "))
             if (!record.workSetup) record.worth?.let { Text("Worthwhile · $it") }
@@ -223,7 +233,7 @@ internal fun nearbyDayLines(diary: Diary, date: LocalDate, today: LocalDate, inc
                     false -> "No ${category.lowercase()}"
                     null -> null
                 }
-            } + tags
+            } + tags + listOfNotNull("No rests or naps".takeIf { restRecorded(day, activities) == false })
             if (summary.isNotEmpty()) add(summary.joinToString(" · "))
             if (!day?.context.isNullOrEmpty()) add(day?.context.orEmpty().joinToString(" · "))
         }

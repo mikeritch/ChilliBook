@@ -66,7 +66,7 @@ object Backup {
                 require(customActivityTag(tag.removePrefix(CUSTOM_ACTIVITY_PREFIX)) == tag)
             } else {
                 require(pin.displayTag == null)
-                require(key in otherTags || categoryTags.any { (category, tags) ->
+                require(key == "Quiet rest" || key in otherTags || categoryTags.any { (category, tags) ->
                     category != "Work" && key != category && key in tags
                 })
             }
@@ -93,11 +93,11 @@ object Backup {
     }
 
     fun encode(diary: Diary): String = obj(
-        "format" to "ChilliBook", "version" to 5,
+        "format" to "ChilliBook", "version" to 6,
         "days" to rows(diary.days) { d -> obj(
             "date" to d.date, "work" to d.work, "social" to d.social, "household" to d.household,
             "wellbeing" to d.wellbeing, "impact" to d.impact, "context" to set(d.context),
-            "at" to d.at, "zone" to d.zone
+            "at" to d.at, "zone" to d.zone, "noRests" to d.noRests
         ) },
         "checks" to rows(diary.checks) { c -> obj(
             "date" to c.date, "slot" to c.slot, "energy" to c.energy, "sleep" to c.sleep,
@@ -107,7 +107,8 @@ object Backup {
             "id" to a.id, "date" to a.date, "tags" to set(a.tags), "duration" to a.duration,
             "effort" to a.effort, "demands" to set(a.demands), "worth" to a.worth,
             "workLength" to a.workLength, "workPlace" to a.workPlace, "at" to a.at, "zone" to a.zone,
-            "workSetup" to a.workSetup
+            "workSetup" to a.workSetup, "restKind" to a.restKind, "restPeriod" to a.restPeriod,
+            "restEnergy" to a.restEnergy
         ) },
         "prefs" to obj("id" to diary.prefs.id, "theme" to diary.prefs.theme,
             "morningReminder" to diary.prefs.morningReminder, "eveningReminder" to diary.prefs.eveningReminder,
@@ -176,10 +177,11 @@ object Backup {
             result
         }
         val version = root.get("version") as Int
-        require(root.string("format") == "ChilliBook" && version in 1..5)
+        require(root.string("format") == "ChilliBook" && version in 1..6)
         val days = root.records("days", Day::date) {
             Day(date("date"), bool("work"), bool("social"), bool("household"), level("wellbeing", 0..4),
-                text("impact"), strings("context"), instant(), zone())
+                text("impact"), strings("context"), instant(), zone(),
+                noRests = if (version >= 6) bool("noRests").also { require(it != false) } else null)
         }
         val severityRange = (if (version >= 3) UNRATED_SYMPTOM else 0)..3
         val checks = root.records("checks", { c: Check -> c.date to c.slot }) {
@@ -191,11 +193,26 @@ object Backup {
             require(slot == "am" || sleep == null)
             Check(date("date"), slot, level("energy", 0..4), sleep, symptoms, instant(), zone())
         }
+        val datesWithoutRests = days.filter { it.noRests == true }.mapTo(mutableSetOf()) { it.date }
         val groupedDates = mutableSetOf<String>()
         val activities = root.records("activities", ActivityEntry::id) {
             ActivityEntry(string("id"), date("date"), strings("tags"), text("duration"), text("effort"),
                 strings("demands"), text("worth"), text("workLength"), text("workPlace"), instant(), zone(),
-                workSetup = version >= 5 && get("workSetup") as Boolean).also { entry ->
+                workSetup = version >= 5 && get("workSetup") as Boolean,
+                restKind = if (version >= 6) text("restKind") else null,
+                restPeriod = if (version >= 6) text("restPeriod") else null,
+                restEnergy = if (version >= 6) text("restEnergy") else null).also { entry ->
+                if (entry.restKind == null) {
+                    require(entry.restPeriod == null && entry.restEnergy == null)
+                } else {
+                    require(entry.restKind in restKinds && entry.tags == setOf(entry.restKind))
+                    require(entry.restPeriod == null || entry.restPeriod in restPeriods)
+                    require(entry.duration == null || entry.duration in restDurations)
+                    require(entry.restEnergy == null || entry.restEnergy in restEnergies)
+                    require(!entry.workSetup && entry.workPlace == null && entry.workLength == null)
+                    require(entry.effort == null && entry.demands.isEmpty() && entry.worth == null)
+                }
+                if (entry.restKind != null || "Quiet rest" in entry.tags) require(entry.date !in datesWithoutRests)
                 if (entry.workSetup) {
                     require(groupedDates.add(entry.date) && "Work" in entry.tags)
                     require(entry.duration == null && entry.worth == null && entry.workPlace == null)

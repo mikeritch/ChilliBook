@@ -5,7 +5,7 @@ internal typealias DiaryEdit = ((Diary) -> Diary) -> Unit
 internal fun Diary.changeDay(date: String, update: (Day) -> Day): Diary {
     val day = update(days.find { it.date == date } ?: Day(date))
     val empty = day.work == null && day.social == null && day.household == null && day.wellbeing == null &&
-        day.impact == null && day.context.isEmpty()
+        day.impact == null && day.context.isEmpty() && day.noRests != true
     return copy(days = days.filterNot { it.date == date } + listOfNotNull(day.takeUnless { empty }))
 }
 

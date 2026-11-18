@@ -29,7 +29,7 @@ internal fun Diary.answeredReminder(date: String, slot: String): Boolean =
     checks.any { it.date == date && it.slot == slot && (it.energy != null || it.sleep != null || it.symptoms.isNotEmpty()) } ||
         (slot == "pm" && (activities.any { it.date == date } || days.any { it.date == date &&
             (it.work != null || it.social != null || it.household != null || it.wellbeing != null ||
-                it.impact != null || it.context.isNotEmpty()) }))
+                it.impact != null || it.context.isNotEmpty() || it.noRests == true) }))
 
 object Reminders {
     const val EXTRA_SLOT = "reminder_slot"

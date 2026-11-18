@@ -1,5 +1,8 @@
 package uk.chillibook.diary
 
+import android.content.BroadcastReceiver
+import android.content.Context
+import android.content.IntentFilter
 import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -16,8 +19,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.*
+import androidx.core.content.ContextCompat
 import androidx.core.view.WindowCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
 import java.time.LocalDate
@@ -29,8 +32,28 @@ class MainActivity : ComponentActivity() {
     private var reminderTarget by mutableStateOf<ReminderTarget?>(null)
     private var diaryModel: DiaryViewModel? = null
 
+    private var localDay by mutableStateOf(LocalDate.now())
+    private val calendarChanged = object : BroadcastReceiver() {
+        override fun onReceive(context: Context, intent: Intent) { localDay = LocalDate.now() }
+    }
+
+    override fun onStart() {
+        super.onStart()
+        val changes = IntentFilter(Intent.ACTION_DATE_CHANGED).apply {
+            addAction(Intent.ACTION_TIME_CHANGED)
+            addAction(Intent.ACTION_TIMEZONE_CHANGED)
+        }
+        ContextCompat.registerReceiver(this, calendarChanged, changes, ContextCompat.RECEIVER_NOT_EXPORTED)
+    }
+
+    override fun onStop() {
+        unregisterReceiver(calendarChanged)
+        super.onStop()
+    }
+
     override fun onResume() {
         super.onResume()
+        localDay = LocalDate.now()
         diaryModel?.refreshReminders()
     }
 
@@ -70,19 +93,24 @@ class MainActivity : ComponentActivity() {
                 }
             }
             SideEffect { diaryModel = vm }
-            DiaryTheme(dark) { DiaryHome(vm, reminderTarget) { reminderTarget = null } }
+            DiaryTheme(dark) { DiaryHome(vm, localDay.toString(), reminderTarget) { reminderTarget = null } }
         }
     }
 }
 
 @Composable
-private fun DiaryHome(vm: DiaryViewModel, target: ReminderTarget?, consume: () -> Unit) {
+private fun DiaryHome(vm: DiaryViewModel, localDay: String, target: ReminderTarget?, consume: () -> Unit) {
     var tab by rememberSaveable { mutableStateOf("Today") }
     var settings by rememberSaveable { mutableStateOf(false) }
     var detail by rememberSaveable { mutableStateOf<String?>(null) }
     var editing by rememberSaveable { mutableStateOf(false) }
     var editSlot by rememberSaveable { mutableStateOf("am") }
-    var date by rememberSaveable { mutableStateOf(LocalDate.now().toString()) }
+    var date by rememberSaveable { mutableStateOf(localDay) }
+    var previousLocalDay by rememberSaveable { mutableStateOf(localDay) }
+    LaunchedEffect(localDay) {
+        if (date == previousLocalDay) date = localDay
+        previousLocalDay = localDay
+    }
     var slot by rememberSaveable { mutableStateOf(if (LocalTime.now().hour < 15) "am" else "pm") }
     val holder = key(vm.resetGeneration) { rememberSaveableStateHolder() }
     var todayVisit by rememberSaveable { mutableIntStateOf(0) }
@@ -120,52 +148,73 @@ private fun DiaryHome(vm: DiaryViewModel, target: ReminderTarget?, consume: () -
     }
     BackHandler(settings || detail != null || tab != "Today", onBack = back)
     val colors = MaterialTheme.colorScheme
+    val checkInDate = when {
+        settings -> null
+        editing -> detail
+        tab == "Today" && detail == null -> date
+        else -> null
+    }
+    val celebration = key(localDay, vm.resetGeneration) { rememberDayCelebration(checkInDate, vm.dayCompletions) }
+    val earned = checkInDate != null && vm.celebrationDay == localDay
     Surface(color = colors.background, contentColor = colors.onBackground, modifier = Modifier.fillMaxSize()) {
-        Column(Modifier.safeDrawingPadding()) {
-            Row(Modifier.fillMaxWidth().padding(start = 20.dp,end = 10.dp).heightIn(min = 48.dp),
-                verticalAlignment = Alignment.CenterVertically) {
-                if (settings || detail != null) TextButton(onClick = back) { Text("‹  Back") }
-                Text(if (settings) "Settings" else if (detail != null) "Diary entry" else if (tab == "Today") "Today" else "ChilliBook",
-                    Modifier.weight(1f), color = colors.primary, fontWeight = FontWeight.SemiBold, fontSize = 17.sp)
-                if (!settings) IconButton(onClick = { settings = true }) {
-                    Icon(painterResource(R.drawable.settings), "Settings", Modifier.size(21.dp))
+        Box(Modifier.fillMaxSize()) {
+            Column(Modifier.safeDrawingPadding()) {
+                Row(Modifier.fillMaxWidth().padding(start = 20.dp,end = 10.dp).heightIn(min = 48.dp),
+                    verticalAlignment = Alignment.CenterVertically) {
+                    if (settings || detail != null) TextButton(onClick = back) { Text("‹  Back") }
+                    DayThanksHeading(
+                        title = when {
+                            settings -> "Settings"
+                            detail != null -> "Diary entry"
+                            tab != "Today" -> "ChilliBook"
+                            date == localDay -> "Today"
+                            else -> "Check-in"
+                        },
+                        earned = earned, animation = celebration, modifier = Modifier.weight(1f)
+                    )
+                    if (!settings) IconButton(onClick = { settings = true }) {
+                        Icon(painterResource(R.drawable.settings), "Settings", Modifier.size(21.dp))
+                    }
                 }
-            }
-            Box(Modifier.weight(1f)) {
-                val diary = vm.diary
-                when {
-                    diary == null -> Column(Modifier.padding(20.dp)) {
-                        Text(vm.status)
-                        if (vm.status.startsWith("Couldn’t")) TextButton(onClick = vm::retry) { Text("Retry") }
-                    }
-                    settings -> SettingsScreen(diary, vm::edit, vm::restore, vm.status, vm::retry, back, vm::reset, vm.resetting)
-                    detail != null && editing -> holder.SaveableStateProvider("edit-${detail}") {
-                        TodayScreen(diary,detail!!,editSlot,{detail=it},{editSlot=it},vm::edit,vm.status,vm::retry)
-                    }
-                    detail != null -> holder.SaveableStateProvider("day-${detail}") {
-                        DateDetail(diary, detail!!) { editSlot = it; editing = true }
-                    }
-                    else -> holder.SaveableStateProvider(if (tab == "Today") "Today-$todayVisit" else tab) {
-                        when (tab) {
-                            "Today" -> TodayScreen(diary,date,slot,{date=it},{slot=it},vm::edit,vm.status,vm::retry)
-                            "History" -> HistoryScreen(diary) { detail=it }
-                            else -> PatternsScreen(diary,{detail=it},{tab="Today"; date=LocalDate.now().toString()})
+                Box(Modifier.weight(1f)) {
+                    val diary = vm.diary
+                    when {
+                        diary == null -> Column(Modifier.padding(20.dp)) {
+                            Text(vm.status)
+                            if (vm.status.startsWith("Couldn’t")) TextButton(onClick = vm::retry) { Text("Retry") }
+                        }
+                        settings -> SettingsScreen(diary, vm::edit, vm::restore, vm.status, vm::retry, back, vm::reset, vm.resetting)
+                        detail != null && editing -> holder.SaveableStateProvider("edit-${detail}") {
+                            TodayScreen(diary,detail!!,editSlot,{detail=it},{editSlot=it},{ change -> vm.editCheckIn(detail, change) },vm.status,vm::retry)
+                        }
+                        detail != null -> holder.SaveableStateProvider("day-${detail}") {
+                            DateDetail(diary, detail!!) { editSlot = it; editing = true }
+                        }
+                        else -> holder.SaveableStateProvider(if (tab == "Today") "Today-$todayVisit" else tab) {
+                            when (tab) {
+                                "Today" -> TodayScreen(diary,date,slot,{date=it},{slot=it},{ change -> vm.editCheckIn(date, change) },vm.status,vm::retry)
+                                "History" -> HistoryScreen(diary) { detail=it }
+                                else -> PatternsScreen(diary,{detail=it},{tab="Today"; date=LocalDate.now().toString()})
+                            }
                         }
                     }
                 }
+                HorizontalDivider(color = colors.outlineVariant)
+                NavigationBar(containerColor = colors.background, tonalElevation = 0.dp,
+                    windowInsets = WindowInsets(0), modifier = Modifier.fillMaxWidth()) {
+                    listOf("Today" to R.drawable.nav_today,"History" to R.drawable.nav_history,"Patterns" to R.drawable.nav_patterns)
+                        .forEach { (name, icon) ->
+                            NavigationBarItem(selected = tab == name && !settings, onClick = {
+                                settings = false; detail = null; editing = false; tab = name
+                            }, icon = { Icon(painterResource(icon), null, Modifier.size(22.dp)) },
+                            label = { Text(name) }, colors = NavigationBarItemDefaults.colors(
+                                selectedIconColor = colors.primary, selectedTextColor = colors.primary,
+                                indicatorColor = colors.secondaryContainer, unselectedIconColor = colors.onSurfaceVariant))
+                        }
+                }
             }
-            HorizontalDivider(color = colors.outlineVariant)
-            NavigationBar(containerColor = colors.background, tonalElevation = 0.dp,
-                windowInsets = WindowInsets(0), modifier = Modifier.fillMaxWidth()) {
-                listOf("Today" to R.drawable.nav_today,"History" to R.drawable.nav_history,"Patterns" to R.drawable.nav_patterns)
-                    .forEach { (name, icon) ->
-                        NavigationBarItem(selected = tab == name && !settings, onClick = {
-                            settings = false; detail = null; editing = false; tab = name
-                        }, icon = { Icon(painterResource(icon), null, Modifier.size(22.dp)) },
-                        label = { Text(name) }, colors = NavigationBarItemDefaults.colors(
-                            selectedIconColor = colors.primary, selectedTextColor = colors.primary,
-                            indicatorColor = colors.secondaryContainer, unselectedIconColor = colors.onSurfaceVariant))
-                    }
+            if (earned && celebration != null) {
+                DayCelebrationBurst({ celebration.value }, Modifier.matchParentSize())
             }
         }
     }

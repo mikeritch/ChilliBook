@@ -38,9 +38,10 @@ interface DiaryDao {
     @Delete suspend fun deleteActivity(value: ActivityEntry)
 }
 
-@Database(entities = [Day::class, Check::class, ActivityEntry::class, Prefs::class], version = 5, exportSchema = true,
+@Database(entities = [Day::class, Check::class, ActivityEntry::class, Prefs::class], version = 6, exportSchema = true,
     autoMigrations = [AutoMigration(from = 1, to = 2), AutoMigration(from = 2, to = 3, spec = RemoveRetiredFields::class),
-        AutoMigration(from = 3, to = 4, spec = RemoveSymptomPins::class), AutoMigration(from = 4, to = 5)])
+        AutoMigration(from = 3, to = 4, spec = RemoveSymptomPins::class), AutoMigration(from = 4, to = 5),
+        AutoMigration(from = 5, to = 6)])
 @TypeConverters(ValueConverters::class)
 abstract class DiaryDatabase : RoomDatabase() {
     abstract fun diary(): DiaryDao

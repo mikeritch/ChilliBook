@@ -1,12 +1,16 @@
 package uk.chillibook.diary
 
 import android.app.Application
+import android.content.Context
 import androidx.compose.runtime.*
 import androidx.lifecycle.AndroidViewModel
+import java.time.LocalDate
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -29,6 +33,12 @@ class DiaryViewModel(app: Application) : AndroidViewModel(app) {
         private set
     var status by mutableStateOf("")
         private set
+    private val completedDays = MutableSharedFlow<String>(extraBufferCapacity = 1)
+    val dayCompletions = completedDays.asSharedFlow()
+    private val rewards = app.getSharedPreferences("day_rewards", Context.MODE_PRIVATE)
+    var celebrationDay by mutableStateOf(rewards.getString(EARNED_ON, null))
+        private set
+    private var pendingEditDate: String? = null
     private var pendingRestore = false
     private var revision = 0L
 
@@ -39,6 +49,7 @@ class DiaryViewModel(app: Application) : AndroidViewModel(app) {
 
     // More than one activity can be alive when a notification opens the diary.
     private companion object {
+        const val EARNED_ON = "earned_on"
         val openModels = mutableSetOf<DiaryViewModel>()
     }
 
@@ -51,6 +62,7 @@ class DiaryViewModel(app: Application) : AndroidViewModel(app) {
         committed = empty
         diary = empty
         pendingRestore = false
+        pendingEditDate = null
         resetGeneration++
         status = "Diary reset"
     }
@@ -64,6 +76,7 @@ class DiaryViewModel(app: Application) : AndroidViewModel(app) {
             try {
                 val empty = Diary()
                 storage.replace(empty)
+                clearRewards()
                 openModels.forEach { it.acceptReset(empty) }
                 try {
                     Reminders.clear(getApplication())
@@ -96,7 +109,7 @@ class DiaryViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    private fun persist(target: Diary) {
+    private fun persist(target: Diary, editDate: String?) {
         val generation = resetGeneration
         val writeRevision = ++revision
         val replace = pendingRestore
@@ -105,6 +118,11 @@ class DiaryViewModel(app: Application) : AndroidViewModel(app) {
             if (generation != resetGeneration) return@enqueue
             try {
                 if (replace) storage.replace(target) else storage.save(committed, target)
+                if (replace) {
+                    clearRewards()
+                } else if (editDate != null && newlyCompletedDay(committed, target, editDate)) {
+                    celebrate(editDate)
+                }
                 committed = target
                 refreshReminders()
                 if (revision == writeRevision) {
@@ -118,24 +136,45 @@ class DiaryViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    fun edit(transform: (Diary) -> Diary) {
+    private fun celebrate(entryDate: String) {
+        val entryKey = "completed_$entryDate"
+        val earnedOn = LocalDate.now().toString()
+        val sameDay = rewards.getString(EARNED_ON, null) == earnedOn
+        if (sameDay && rewards.contains(entryKey)) return
+        val update = rewards.edit()
+        if (!sameDay) update.clear()
+        update.putBoolean(entryKey, true).putString(EARNED_ON, earnedOn).apply()
+        openModels.forEach { it.celebrationDay = earnedOn }
+        completedDays.tryEmit(entryDate)
+    }
+
+    private fun clearRewards() {
+        rewards.edit().clear().apply()
+        openModels.forEach { it.celebrationDay = null }
+    }
+
+    fun edit(transform: (Diary) -> Diary) = editCheckIn(null, transform)
+
+    fun editCheckIn(date: String?, transform: (Diary) -> Diary) {
         if (resetting) return
         val next = transform(diary ?: return)
         if (next == diary) return
         diary = next
-        persist(next)
+        pendingEditDate = date
+        persist(next, date)
     }
 
     fun restore(value: Diary) {
         if (resetting) return
         pendingRestore = true
         diary = value
-        persist(value)
+        pendingEditDate = null
+        persist(value, null)
     }
 
     fun retry() {
         if (resetting) return
-        diary?.let(::persist) ?: load()
+        diary?.let { persist(it, pendingEditDate) } ?: load()
     }
 
     override fun onCleared() {

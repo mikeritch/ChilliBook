@@ -23,6 +23,23 @@ class HistoryContextTest {
         assertEquals(emptyList<HistoryMatch>(), historyMatches(diary, "Brain fog"))
     }
 
+    @Test fun restSearchPreservesIndividualKindsAndLegacyNames() {
+        val older = "2026-02-27"
+        val recent = "2026-03-01"
+        val diary = Diary(
+            days = listOf(Day("2026-02-28", noRests = true)),
+            activities = listOf(
+                ActivityEntry(date = older, tags = setOf("Quiet rest", "Hobby")),
+                ActivityEntry(date = recent, tags = setOf("Nap"), restKind = "Nap"),
+            ),
+        )
+        assertEquals(listOf(HistoryMatch(older, listOf("Quiet rest"))), historyMatches(diary, "rest"))
+        assertEquals(listOf(HistoryMatch(recent, listOf("Nap"))), historyMatches(diary, "nap"))
+        assertEquals(listOf(recent, older), historyMatches(diary, REST_GROUP).map { it.date })
+        val noRestsDate = LocalDate.parse("2026-02-28")
+        assertEquals("No rests or naps", nearbyDayLines(diary, noRestsDate, noRestsDate, true).last())
+    }
+
     @Test fun gapsAndExplicitNoStayDistinctAcrossMonthBoundary() {
         val today = LocalDate.of(2026, 3, 2)
         val earlier = today.minusDays(2)

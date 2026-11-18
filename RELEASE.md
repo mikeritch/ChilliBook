@@ -7,7 +7,7 @@
 **Over USB.** Enable USB debugging and authorise the computer on the phone. Place the signed APK beside [Install ChilliBook.command](<release/Install ChilliBook.command>) and double-click the command on macOS. With Android SDK Platform-Tools on your path, you can also run the following from the project root.
 
 ```sh
-adb -d install -r release/ChilliBook-1.6.apk
+adb -d install -r release/ChilliBook-1.7.apk
 ```
 
 ## Back up or move the diary
@@ -26,12 +26,22 @@ Choose **Settings → Back up diary** and select a private destination. The JSON
 apk=app/build/outputs/apk/release/app-release.apk
 apksigner verify --print-certs "$apk"
 aapt dump badging "$apk" | head -1
-version=1.6  # set to the version you just built
+version=1.7  # set to the version you just built
 cp "$apk" "release/ChilliBook-$version.apk"
 git tag "v$version"
 git push origin HEAD "v$version"
 gh release create "v$version" "release/ChilliBook-$version.apk" --verify-tag --generate-notes --latest
 ```
+
+## Release 1.7
+
+Tap the date beneath Morning or Evening to open the calendar and backfill a check-in.
+
+In Patterns, tap an activity count to see the dates, evening wellbeing and energy on the next two mornings. Completing both check-ins opens a silent flower celebration. The flower stays in the check-in header for the rest of the local day.
+
+Evening → Rest & naps saves a separate episode each time you tap Add rest or Add nap. Time of day, duration and energy afterwards are optional. Earlier Quiet rest activities appear in the same section with their original details and edit controls. History shows the episodes individually. Patterns counts the dates on which they occurred.
+
+The signed 1.6 → 1.7 emulator update preserved all 355 days, 673 check-ins, 157 activities and preferences in the sample diary, including an existing Quiet rest. The migration test also covered two Quiet rest records on one date, a mixed-tag entry and a saved Quiet rest setup. Room applies the update automatically. Older JSON backups remain readable.
 
 ## Release 1.6
 

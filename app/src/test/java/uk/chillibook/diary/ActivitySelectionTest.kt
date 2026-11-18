@@ -33,9 +33,9 @@ class ActivitySelectionTest {
         val custom = ActivityEntry(date = date, tags = setOf(customActivityTag("Walk")))
         val index = PatternIndex(Diary(activities = listOf(custom, custom.copy(id = "duplicate"),
             custom.copy(id = "next", date = first.plusDays(1).toString(), tags = setOf(customActivityTag("walk"))))))
-        val dates = index.activityDates(first, first.plusDays(2), customActivityTag("Walk"))
-        assertEquals(listOf(first, first.plusDays(1)), dates[true])
-        assertEquals(listOf(first.plusDays(2)), dates[null])
+        val cells = index.activityFrequency(first, first.plusDays(2)).cells.getValue(customActivityTag("Walk"))
+        assertEquals(listOf(listOf(first), listOf(first.plusDays(1)), emptyList()), cells.map { it.dates })
+        assertEquals(listOf(1, 1, 0), cells.map { it.recordedDays })
     }
 
     @Test fun customNamesCannotImplyACategoryOrDuplicateAnotherCustomChip() {

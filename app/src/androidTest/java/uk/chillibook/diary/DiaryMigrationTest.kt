@@ -42,6 +42,37 @@ class DiaryMigrationTest {
 
     @Test fun productionOpenMigratesPopulatedV4AndKeepsLaterWrites() = checkUpgrade(4)
 
+    @Test fun populatedV5KeepsRepeatedQuietRestsAndPinsAcrossEditAndReopen() = runBlocking {
+        val date = "2026-11-01"
+        val at = "2026-11-02T01:00:00Z"
+        val zone = "America/New_York"
+        val quiet = ActivityEntry("a", date, setOf("Quiet rest"), duration = "Under 15 min",
+            effort = "Light", worth = "Yes", at = at, zone = zone)
+        val mixed = quiet.copy(id = "b", tags = setOf("Quiet rest", "Walking"), duration = "Over an hour",
+            effort = "High", demands = setOf("Physical"), worth = "Mixed", workLength = "Part day", workPlace = "Both")
+        val pin = ActivitySetup(effort = "Light")
+        val original = Diary(days = listOf(Day(date, work = false, at = at, zone = zone)),
+            activities = listOf(quiet, mixed), prefs = Prefs(activityPins = mapOf("Quiet rest" to pin)))
+        createReleasedDatabase(5).use { db ->
+            db.execSQL("INSERT INTO days (date,work,context,at,zone) VALUES (?,0,'[]',?,?)", arrayOf(date, at, zone))
+            db.execSQL("""INSERT INTO prefs (id,theme,activityPins) VALUES (1,'system',
+                '{"Quiet rest":{"duration":null,"effort":"Light","demands":[],"worth":null,"displayTag":null}}')""")
+            db.execSQL("""INSERT INTO activities (id,date,tags,duration,effort,demands,worth,at,zone)
+                VALUES ('a',?,'["Quiet rest"]','Under 15 min','Light','[]','Yes',?,?)""", arrayOf(date, at, zone))
+            db.execSQL("""INSERT INTO activities (id,date,tags,duration,effort,demands,worth,workLength,workPlace,at,zone)
+                VALUES ('b',?,'["Walking","Quiet rest"]','Over an hour','High','["Physical"]','Mixed','Part day','Both',?,?)""",
+                arrayOf(date, at, zone))
+        }
+        val kind = restKinds.first()
+        val updated = original.copy(activities = original.activities + ActivityEntry("c", date, setOf(kind),
+            restKind = kind, restPeriod = restPeriods.first(), restEnergy = restEnergies.first(), at = at, zone = zone))
+        Storage(context, file).use {
+            assertEquals(original, it.read())
+            it.save(original, updated)
+        }
+        Storage(context, file).use { assertEquals(updated, it.read()) }
+    }
+
     private fun checkUpgrade(version: Int) = runBlocking {
         val at = "2026-11-18T16:02:12Z"
         val zone = "America/New_York"

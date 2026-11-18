@@ -35,11 +35,11 @@ internal fun EveningActivities(diary: Diary, date: String, edit: DiaryEdit) {
     var recentCustomTags by rememberSaveable { mutableStateOf(arrayListOf<String>()) }
     val customTags = (diary.activities.flatMap { it.tags } + diary.prefs.activityPins.values.mapNotNull { it.displayTag } + recentCustomTags)
         .filter { it.startsWith(CUSTOM_ACTIVITY_PREFIX) }.distinctBy(::activityTagKey)
-    val ordinary = entries.filterNot { it.workSetup }
+    val ordinary = entries.filter { !it.workSetup && it.restKind == null }
     val byTag = ordinary.flatMap { entry -> entry.tags.map { activityTagKey(it) to entry } }
         .groupBy({ it.first }, { it.second })
     val presetsByGroup = categoryTags.mapValues { (group, tags) -> tags.filter { it != group } } +
-        ("Other" to otherTags + customTags)
+        ("Other" to otherTags.filter { it != "Quiet rest" } + customTags)
     fun simpleEntry(tag: String) = byTag[activityTagKey(tag)]?.singleOrNull()?.takeIf { it.tags.size == 1 }
     fun showAction(group: String, message: String) {
         removed = null
@@ -68,6 +68,10 @@ internal fun EveningActivities(diary: Diary, date: String, edit: DiaryEdit) {
         if (group == "Work") {
             WorkActivity(diary, date, tagged, edit) { editingId = it }
             return@forEach
+        }
+        if (other) {
+            RestActivities(diary, date, entries, edit) { editingId = it }
+            Spacer(Modifier.height(22.dp))
         }
         if (other) Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             DiaryIcon(R.drawable.diary_sprout, categoryAccent(group))
@@ -129,7 +133,7 @@ internal fun EveningActivities(diary: Diary, date: String, edit: DiaryEdit) {
             Text(feedback!!.second, Modifier.weight(1f).semantics { liveRegion = LiveRegionMode.Polite },
                 style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
             removed?.let { entry -> TextButton(onClick = {
-                edit { it.restoreActivity(entry) }
+                edit { if ("Quiet rest" in entry.tags) it.recordRest(entry) else it.restoreActivity(entry) }
                 feedback = null
                 removed = null
             }) { Text("Undo") } }
@@ -139,7 +143,7 @@ internal fun EveningActivities(diary: Diary, date: String, edit: DiaryEdit) {
         }
     }
     val inlineEntries = presetsByGroup.values.flatten().mapNotNull(::simpleEntry).toSet()
-    val legacy = ordinary.filter { it !in inlineEntries && it.tags.none { tag -> tag in categoryTags.getValue("Work") } }
+    val legacy = ordinary.filter { it !in inlineEntries && "Quiet rest" !in it.tags && it.tags.none { tag -> tag in categoryTags.getValue("Work") } }
     if (legacy.isNotEmpty()) {
         Text("Recorded activities", style = MaterialTheme.typography.titleMedium)
         legacy.forEachIndexed { i, entry -> DetailLink("${i + 1}. ${entry.activityLabel()}", "Edit") { editingId = entry.id } }
@@ -197,11 +201,11 @@ private fun ActivityFields(activity: ActivityEntry, day: Day?, prefs: Prefs, edi
     var conflict by rememberSaveable { mutableStateOf<String?>(null) }
     var remove by rememberSaveable { mutableStateOf(false) }
     fun update(change: (ActivityEntry) -> ActivityEntry) {
-        edit { d -> d.copy(activities = d.activities.map { if (it.id == activity.id) change(it) else it }) }
+        edit { d -> d.updateEveningActivity(activity.id, activity.date, change) }
     }
     fun toggle(tag: String) = update { it.copy(tags = it.tags.toggle(tag)) }
     Text("Choose one or more tags for this activity.", style = MaterialTheme.typography.bodySmall)
-    val groups = categoryTags + mapOf("Everyday" to otherTags.toSet())
+    val groups = categoryTags + mapOf("Everyday" to otherTags.filter { it != "Quiet rest" || it in activity.tags }.toSet())
     val other = activity.tags - groups.values.flatten().toSet()
     for ((category, tags) in groups + (if (other.isEmpty()) emptyMap() else mapOf("Other" to other))) {
         ActivityChips(category, tags.toList(), activity.tags.intersect(tags)) { tag ->
@@ -245,7 +249,7 @@ private fun DetailChoices(activity: ActivityEntry, update: ((ActivityEntry) -> A
 }
 
 @Composable
-private fun ActivityChoice(label: String, choices: List<String>, selected: String?, change: (String?) -> Unit) {
+internal fun ActivityChoice(label: String, choices: List<String>, selected: String?, change: (String?) -> Unit) {
     ActivityChips(label, choices, setOfNotNull(selected)) { choice ->
         change(choice.takeUnless { it == selected })
     }

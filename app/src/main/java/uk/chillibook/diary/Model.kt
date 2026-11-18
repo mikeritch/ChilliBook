@@ -14,7 +14,7 @@ private fun zoneNow() = ZoneId.systemDefault().id
 data class Day(@PrimaryKey val date: String, val work: Boolean? = null, val social: Boolean? = null,
     val household: Boolean? = null, val wellbeing: Int? = null, val impact: String? = null,
     val context: Set<String> = emptySet(),
-    val at: String = now(), val zone: String = zoneNow())
+    val at: String = now(), val zone: String = zoneNow(), val noRests: Boolean? = null)
 
 @Entity(tableName = "checks", primaryKeys = ["date","slot"])
 data class Check(val date: String, val slot: String, val energy: Int? = null, val sleep: Int? = null,
@@ -25,7 +25,8 @@ data class ActivityEntry(@PrimaryKey val id: String = UUID.randomUUID().toString
     val tags: Set<String> = emptySet(), val duration: String? = null, val effort: String? = null,
     val demands: Set<String> = emptySet(), val worth: String? = null, val workLength: String? = null,
     val workPlace: String? = null, val at: String = now(), val zone: String = zoneNow(),
-    @ColumnInfo(defaultValue = "0") val workSetup: Boolean = false)
+    @ColumnInfo(defaultValue = "0") val workSetup: Boolean = false,
+    val restKind: String? = null, val restPeriod: String? = null, val restEnergy: String? = null)
 
 data class WorkSetup(val parts: Set<String> = emptySet(), val workLength: String? = null,
     val effort: String? = null, val demands: Set<String> = emptySet())
@@ -64,6 +65,10 @@ val categoryTags = mapOf(
     "Household" to setOf("Household","Cooking","Laundry","Cleaning","Shopping")
 )
 val otherTags = listOf("Personal care","Travel","Walking","Admin/screens","Quiet rest","Hobby")
+internal val restKinds = listOf("Rest", "Nap")
+internal val restPeriods = listOf("Morning", "Afternoon", "Evening")
+internal val restDurations = listOf("Under 15 min", "15–29 min", "30–59 min", "1 hr or more")
+internal val restEnergies = listOf("Lower", "About the same", "Higher")
 fun activityFlag(day: Day?, activities: List<ActivityEntry>, category: String): Boolean? {
     if (activities.any { entry -> entry.tags.any { it in categoryTags[category].orEmpty() } }) return true
     return when(category) {

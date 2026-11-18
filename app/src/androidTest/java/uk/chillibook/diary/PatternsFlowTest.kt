@@ -38,25 +38,28 @@ class PatternsFlowTest {
 
     @Test fun activityAndSymptomDatesFollowTheSelectedRange() {
         var opened = ""
-        val data = fixture.copy(checks = fixture.checks + Check(gap.toString(), "am",
-            symptoms = mapOf("Brain fog" to 0)))
+        val week = today.minusDays(13)
+        val cooking = week.plusDays(6)
+        val data = fixture.copy(
+            days = fixture.days + Day(cooking.toString(), wellbeing = 3),
+            activities = fixture.activities + ActivityEntry(date = cooking.toString(), tags = setOf("Cooking")),
+            checks = fixture.checks + listOf(Check(cooking.plusDays(2).toString(), "am", energy = 1),
+                Check(gap.toString(), "am", symptoms = mapOf("Brain fog" to 0)))
+        )
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
             scenario.onActivity { activity ->
                 activity.setContent { DiaryTheme(false) {
                     Surface { PatternsScreen(data, onDate = { opened = it }, onToday = {}) }
                 } }
             }
+            compose.onNodeWithContentDescription("Cooking, $week, 1 recorded day").performScrollTo().performClick()
+            val entry = compose.onNodeWithContentDescription("Open diary entry for $cooking")
+            entry.assert(hasText("Fairly well") and hasText("No entry") and hasText("Low"))
+            entry.assert(hasText("Next morning’s energy · ${cooking.plusDays(1).format(shortDate)}") and
+                hasText("Two mornings later · ${cooking.plusDays(2).format(shortDate)}"))
+            entry.performScrollTo().performClick()
+            compose.runOnIdle { assertEquals(cooking.toString(), opened) }
             tap("7 days")
-            compose.onNodeWithText("Work · 1 of 7 days").performScrollTo().assertIsDisplayed()
-            compose.onNodeWithText("Socialising · 1 of 7 days").assertExists()
-            tap("Call · 1 of 7 days")
-            compose.onNodeWithText("Call · 1 of 7 days").assertIsSelected()
-            compose.onNodeWithText("Call by weekday").assertExists()
-            compose.onNodeWithText("Marked / Unmarked").assertExists()
-            tap("Activity dates   ›")
-            inDialog(anchor.format(longDate)).performClick()
-            compose.runOnIdle { assertEquals(anchor.toString(), opened) }
-            inDialog("Close").performClick()
             compose.onNodeWithText("Morning · 1 of 7 days").performScrollTo().assertIsDisplayed()
             compose.onNodeWithText("Morning · 6 of 7 days").assertExists()
             tap("Symptom rating dates   ›")
