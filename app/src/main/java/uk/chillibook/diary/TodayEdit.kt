@@ -5,7 +5,7 @@ internal typealias DiaryEdit = ((Diary) -> Diary) -> Unit
 internal fun Diary.changeDay(date: String, update: (Day) -> Day): Diary {
     val day = update(days.find { it.date == date } ?: Day(date))
     val empty = day.work == null && day.social == null && day.household == null && day.wellbeing == null &&
-        day.impact == null && day.workOff == null && day.context.isEmpty()
+        day.impact == null && day.context.isEmpty()
     return copy(days = days.filterNot { it.date == date } + listOfNotNull(day.takeUnless { empty }))
 }
 
@@ -24,7 +24,7 @@ internal fun Day.flag(tag: String) = when(tag) {
 }
 
 internal fun Day.setFlag(tag: String, value: Boolean?) = when(tag) {
-    "Work" -> copy(work = value, workOff = workOff.takeIf { value == false })
+    "Work" -> copy(work = value)
     "Socialising" -> copy(social = value)
     "Household" -> copy(household = value)
     else -> error("Unsupported activity category")

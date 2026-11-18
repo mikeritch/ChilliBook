@@ -19,14 +19,27 @@ class StorageBackupTest {
     private val zone = "Europe/London"
     private val morning = Check("2026-11-15", "am", 2, null, emptyMap(), at, zone)
     private val sample = Diary(
-        listOf(Day("2026-11-15", false, null, null, null, null, emptySet(), null, at, zone)),
+        listOf(Day("2026-11-15", false, null, null, null, null, emptySet(), at, zone)),
         listOf(morning), emptyList(),
-        listOf(Episode("synthetic-crash", "2026-11-10", "2026-11-14", true, false, null, at, zone)),
         Prefs()
     )
 
     @Test fun roundTripPreservesBackfillUnknownsAndExplicitNo() {
         assertEquals(sample, Backup.decode(Backup.encode(sample)))
+    }
+
+    @Test fun unratedIsDistinctFromNoneAndUnknown() {
+        val check = morning.copy(symptoms = mapOf("Brain fog" to UNRATED_SYMPTOM, "Headache" to 0))
+        val original = sample.copy(checks = listOf(check))
+        val backup = JSONObject(Backup.encode(original))
+        assertEquals(3, backup.getInt("version"))
+        assertFalse(backup.has("episodes"))
+        assertFalse(backup.getJSONArray("days").getJSONObject(0).has("workOff"))
+        assertEquals(original, Backup.decode(backup.toString()))
+        for (version in 1..2) {
+            backup.put("version", version)
+            assertTrue(runCatching { Backup.decode(backup.toString()) }.isFailure)
+        }
     }
 
     @Test fun activityRoundTripPreservesLegacyAndCustomRecords() {
@@ -44,6 +57,19 @@ class StorageBackupTest {
         val current = Backup.encode(configured)
         assertEquals(configured, Backup.decode(current))
         val old = JSONObject(current).apply {
+            put("version", 2)
+            put("episodes", org.json.JSONArray().put(JSONObject().apply {
+                put("id", "spell")
+                put("start", "2026-11-10")
+                put("end", JSONObject.NULL)
+                put("approxStart", true)
+                put("approxEnd", false)
+                put("worst", JSONObject.NULL)
+                put("at", at)
+                put("zone", zone)
+            }))
+            getJSONArray("days").getJSONObject(0).put("workOff", "Off sick")
+            assertEquals(configured, Backup.decode(toString()))
             put("version", 1)
             getJSONObject("prefs").remove("morningReminder")
             getJSONObject("prefs").remove("eveningReminder")
@@ -65,10 +91,9 @@ class StorageBackupTest {
     @Test fun missingNullableFieldIsDistinctFromExplicitNull() {
         val backup = Backup.encode(sample.copy(activities = listOf(ActivityEntry(date = morning.date))))
         val fields = mapOf(
-            "days" to listOf("work", "social", "household", "wellbeing", "impact", "workOff"),
+            "days" to listOf("work", "social", "household", "wellbeing", "impact"),
             "checks" to listOf("energy", "sleep"),
-            "activities" to listOf("duration", "effort", "worth", "workLength", "workPlace"),
-            "episodes" to listOf("end", "worst")
+            "activities" to listOf("duration", "effort", "worth", "workLength", "workPlace")
         )
         for ((table, names) in fields) for (name in names) {
             val incomplete = JSONObject(backup)
@@ -86,8 +111,9 @@ class StorageBackupTest {
             }
             val missingField = JSONObject(valid).apply { getJSONArray("days").getJSONObject(0).remove("work") }
             val wrongType = JSONObject(valid).apply { getJSONArray("checks").getJSONObject(0).put("energy", "2") }
-            val badDate = JSONObject(valid).apply { getJSONArray("episodes").getJSONObject(0).put("end", "2026-11-01") }
-            for (damaged in listOf(valid.dropLast(1), valid + "extra", duplicate.toString(),
+            val unsupported = JSONObject(valid).put("version", 4)
+            val badDate = JSONObject(valid).apply { getJSONArray("days").getJSONObject(0).put("date", "2026-02-30") }
+            for (damaged in listOf(valid.dropLast(1), valid + "extra", duplicate.toString(), unsupported.toString(),
                 missingField.toString(), wrongType.toString(), badDate.toString())) {
                 assertTrue(runCatching { store.replace(Backup.decode(damaged)) }.isFailure)
                 assertEquals(sample, store.read())
@@ -96,7 +122,7 @@ class StorageBackupTest {
     }
 
     @Test fun singleAnswerSurvivesReopenAndRetryKeepsOneRecord() = runBlocking {
-        val partial = sample.copy(days = emptyList(), episodes = emptyList())
+        val partial = sample.copy(days = emptyList())
         val empty = partial.copy(checks = emptyList())
         Storage(context, databaseName).use { store ->
             store.replace(empty)

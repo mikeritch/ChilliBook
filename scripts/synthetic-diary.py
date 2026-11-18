@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Write an invented ChilliBook v1 backup for emulator verification."""
+"""Write an invented ChilliBook backup for emulator verification."""
 import argparse
 from datetime import date, timedelta
 import json
@@ -7,7 +7,7 @@ from pathlib import Path
 from uuid import NAMESPACE_DNS, uuid5
 
 
-def generate(end, length):
+def generate(end, length, version=1):
     start = end - timedelta(days=length - 1)
     days, checks, activities, episodes = [], [], [], []
 
@@ -27,7 +27,7 @@ def generate(end, length):
         chores = age % 5 == 3
         day_rec = dict(date=str(day), work=work, social=social, household=chores,
                        wellbeing=[3, 2, 4, 2, 3, 1, 2][age % 7], impact=None,
-                       context=["Fighting a bug"] if age == 13 else [], workOff=None, **stamp(day))
+                       context=["Fighting a bug"] if age == 13 else [], workOff="Planned day off" if not work else None, **stamp(day))
         days.append(day_rec)
         for slot in ("am", "pm"):
             if (slot == "am" and age % 23 == 8) or (slot == "pm" and age % 19 == 5):
@@ -56,9 +56,17 @@ def generate(end, length):
         episodes.append(dict(id=sample_id(f"episode-{onset}"), start=str(onset),
                              end=str(recovery) if recovery else None,
                              approxStart=True, approxEnd=False, worst="Heavy fatigue", **stamp(end)))
-    return dict(format="ChilliBook", version=1, days=days, checks=checks,
+    result = dict(format="ChilliBook", version=version, days=days, checks=checks,
                 activities=activities, episodes=episodes,
                 prefs=dict(id=1, theme="system", pins=["Brain fog", "Heavy fatigue"]))
+    if version >= 2:
+        result["prefs"].update(morningReminder=480, eveningReminder=None)
+    if version == 3:
+        del result["episodes"]
+        for day in days:
+            del day["workOff"]
+        checks[0]["symptoms"]["Headache"] = -1
+    return result
 
 
 if __name__ == "__main__":
@@ -66,9 +74,10 @@ if __name__ == "__main__":
     parser.add_argument("output", type=Path)
     parser.add_argument("--end", type=date.fromisoformat, default=date.today())
     parser.add_argument("--days", type=int, choices=[28, 365], default=365)
+    parser.add_argument("--version", type=int, choices=[1, 2, 3], default=1)
     args = parser.parse_args()
-    data = generate(args.end, args.days)
+    data = generate(args.end, args.days, args.version)
     with args.output.open("x", encoding="utf-8") as stream:
         json.dump(data, stream, indent=2)
     print("Synthetic backup:", args.output)
-    print(", ".join(f"{len(data[key])} {key}" for key in ["days", "checks", "activities", "episodes"]))
+    print(", ".join(f"{len(data[key])} {key}" for key in ["days", "checks", "activities", "episodes"] if key in data))

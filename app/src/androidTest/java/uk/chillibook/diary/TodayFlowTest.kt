@@ -1,6 +1,5 @@
 package uk.chillibook.diary
 
-import android.view.KeyEvent
 import android.view.ViewGroup
 import android.view.View
 import android.view.inspector.WindowInspector
@@ -85,37 +84,40 @@ class TodayFlowTest {
         }
     }
 
-    @Test fun symptomSheetStaysAtScrollBoundsAndReturnsToLastSymptom() {
+    @Test fun symptomSelectionPersistsWithOptionalSeverityAcrossCheckIns() {
         assumeTrue(context.packageName.endsWith(".debug"))
         Storage(context).use { store ->
             val initial = runBlocking { store.read() }
             assumeTrue(initial.dates().isEmpty())
+            val name = "Brain fog"
+            fun toggle(action: String) = compose.onNodeWithContentDescription("$action $name").performScrollTo().performClick()
+            fun stored(slot: String, rating: Int?) = awaitStored(store) { data ->
+                data.checks.singleOrNull { it.date == today.toString() && it.slot == slot }?.symptoms?.get(name) == rating
+            }
             try {
                 ActivityScenario.launch(MainActivity::class.java).use {
                     slot(morning = false)
-                    tap("Symptoms & context")
-                    val footer = compose.onNodeWithText("Done")
-                    val body = compose.onNode(hasScrollAction() and hasAnyDescendant(hasText("Crash episodes")))
-                    fun footerTop() = footer.fetchSemanticsNode().boundsInRoot.top
-                    val initialTop = footerTop()
-                    repeat(3) { body.performTouchInput { swipeDown() } }
-                    assertEquals(initialTop, footerTop(), 1f)
-                    compose.onNodeWithText("Crash episodes").performScrollTo()
-                    repeat(3) { body.performTouchInput { swipeUp() } }
-                    compose.onNodeWithText("Crash episodes").assertIsDisplayed()
-                    assertEquals(initialTop, footerTop(), 1f)
-                    val symptom = symptomLabels.last()
-                    val row = compose.onNodeWithText(symptom)
-                    row.performScrollTo()
-                    val rowTop = row.fetchSemanticsNode().boundsInRoot.top
-                    row.performClick()
-                    select(symptom, "Mild")
-                    choice(symptom, "Mild").assertIsSelected()
-                    InstrumentationRegistry.getInstrumentation().sendKeyDownUpSync(KeyEvent.KEYCODE_BACK)
-                    val rated = compose.onNodeWithText("$symptom · Mild").assertIsDisplayed()
-                    assertEquals(rowTop, rated.fetchSemanticsNode().boundsInRoot.top, 1f)
-                    footer.performClick()
-                    awaitStored(store) { data -> data.checks.any { it.symptoms[symptom] == severityLabels.indexOf("Mild") } }
+                    toggle("Select")
+                    stored("pm", UNRATED_SYMPTOM)
+                }
+                ActivityScenario.launch(MainActivity::class.java).use {
+                    slot(morning = false)
+                    choice(name, "Mild").performScrollTo().assertIsNotSelected()
+                    select(name, "None")
+                    stored("pm", 0)
+                    slot(morning = true)
+                    toggle("Select")
+                    select(name, "Strong")
+                    stored("am", 3)
+                    slot(morning = false)
+                    choice(name, "None").performScrollTo().assertIsSelected()
+                    toggle("Remove")
+                    stored("pm", null)
+                    compose.onNodeWithContentDescription("Undo removal of $name").performScrollTo().performClick()
+                    stored("pm", 0)
+                    select(name, "None")
+                    stored("pm", UNRATED_SYMPTOM)
+                    stored("am", 3)
                 }
             } finally {
                 runBlocking { store.replace(initial) }
@@ -190,12 +192,9 @@ class TodayFlowTest {
                     slot(morning = true)
                     select(energyQuestion, "Medium")
                     select(energyQuestion, "High")
-                    tap("Symptoms")
-                    tap("Brain fog")
+                    compose.onNodeWithContentDescription("Select Brain fog").performScrollTo().performClick()
                     select("Brain fog", "Mild")
-                    InstrumentationRegistry.getInstrumentation().sendKeyDownUpSync(KeyEvent.KEYCODE_BACK)
-                    compose.onNodeWithText("Brain fog · Mild").assertExists()
-                    InstrumentationRegistry.getInstrumentation().sendKeyDownUpSync(KeyEvent.KEYCODE_BACK)
+                    choice("Brain fog", "Mild").assertIsSelected()
                     choice(energyQuestion, "High").assertIsSelected()
                     awaitStored(store) { data ->
                         val check = data.checks.singleOrNull { it.date == yesterday.toString() && it.slot == "am" }

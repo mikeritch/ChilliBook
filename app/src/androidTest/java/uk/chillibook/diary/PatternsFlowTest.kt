@@ -29,7 +29,6 @@ class PatternsFlowTest {
         checks = listOf(Check(anchor.toString(), "pm", energy = 2),
             Check(today.toString(), "am", energy = 1)),
         activities = listOf(ActivityEntry(date = anchor.toString(), tags = setOf("Call"), worth = "Yes")),
-        episodes = listOf(Episode(start = gap.toString()))
     )
 
     private fun tap(text: String) = compose.onNodeWithText(text).performScrollTo().performClick()

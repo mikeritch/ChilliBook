@@ -1,6 +1,10 @@
 package uk.chillibook.diary
 
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.graphics.luminance
+import kotlin.math.roundToInt
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
@@ -46,5 +50,36 @@ fun TitleArt(title: String, art: String) {
             }
             Image(painterResource(icon), null, Modifier.padding(end = 8.dp).size(64.dp))
         }
+    }
+}
+
+@Composable
+internal fun categoryAccent(category: String): Color {
+    val dark = MaterialTheme.colorScheme.background.luminance() < .5f
+    return when (category) {
+        "Work" -> if (dark) Color(0xFFB7C7FA) else Color(0xFF475A8F)
+        "Household" -> if (dark) Color(0xFFF4BE92) else Color(0xFF895029)
+        "Socialising", "Symptoms" -> MaterialTheme.colorScheme.tertiary
+        else -> MaterialTheme.colorScheme.primary
+    }
+}
+
+// Order runs from difficult to comfortable. Each endpoint has a separate dark-theme ink.
+private val paperScale = listOf(0xFF92465A, 0xFF945339, 0xFF786021, 0xFF4C7040, 0xFF246759).map { Color(it) }
+private val nightScale = listOf(0xFFF0AEC1, 0xFFF3B69B, 0xFFE6CA85, 0xFFB7D6A4, 0xFF9DDAC3).map { Color(it) }
+
+@Composable
+internal fun scaleAccent(labels: List<String>, index: Int): Color? {
+    val reverse = labels == severityLabels
+    if (!reverse && labels != energyLabels && labels != sleepLabels && labels != wellbeingLabels) return null
+    val step = ((if (reverse) labels.lastIndex - index else index) * 4f / labels.lastIndex).roundToInt()
+    return (if (MaterialTheme.colorScheme.background.luminance() < .5f) nightScale else paperScale)[step]
+}
+
+@Composable
+internal fun DiaryIcon(icon: Int, accent: Color, modifier: Modifier = Modifier) {
+    Box(modifier.size(36.dp).background(accent.copy(alpha = .12f), CircleShape),
+        contentAlignment = Alignment.Center) {
+        Icon(painterResource(icon), null, Modifier.size(23.dp), tint = accent)
     }
 }

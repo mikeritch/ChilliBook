@@ -1,90 +1,89 @@
 package uk.chillibook.diary
 
-import androidx.activity.compose.BackHandler
+import androidx.compose.ui.semantics.*
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
-internal fun TodayDetails(diary: Diary, date: String, slot: String, edit: DiaryEdit, status: String,
-                          retry: () -> Unit, close: () -> Unit, episodes: () -> Unit) {
+internal fun TodayDetails(diary: Diary, date: String, slot: String, edit: DiaryEdit) {
     val day = diary.days.find { it.date == date }
     val check = diary.checks.find { it.date == date && it.slot == slot }
-    var page by rememberSaveable { mutableStateOf("main") }
-    var symptom by rememberSaveable { mutableStateOf("") }
-    val mainScroll = rememberScrollState()
-    fun back() { if (page == "main") close() else page = "main" }
-    DiaryDetailSheet(onDismiss = ::back) {
-        BackHandler(page != "main") { back() }
-        val title = when(page) {
-            "symptom" -> symptom
-            "pins" -> "Pinned symptoms"
-            "corrections" -> "Edit check-in answers"
-            else -> if (slot == "am") "Symptoms" else "Symptoms & context"
+    val symptoms = check?.symptoms.orEmpty()
+    val pins = diary.prefs.pins
+    val names = (pins.sorted() + symptomLabels + symptoms.keys.sorted()).distinct()
+    var editingPins by rememberSaveable { mutableStateOf(false) }
+    var correcting by rememberSaveable { mutableStateOf(false) }
+
+    var removedName by rememberSaveable { mutableStateOf<String?>(null) }
+    var removedRating by rememberSaveable { mutableIntStateOf(UNRATED_SYMPTOM) }
+    Row(Modifier.fillMaxWidth().heightIn(min = 48.dp), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+        Box(Modifier.weight(1f)) { QuestionText("Symptoms") }
+        removedName?.let { name ->
+            TextButton(onClick = {
+                val rating = removedRating
+                edit { d -> d.changeCheck(date, slot) { check ->
+                    if (name in check.symptoms) check else check.copy(symptoms = check.symptoms + (name to rating))
+                } }
+                removedName = null
+            }, modifier = Modifier.semantics { contentDescription = "Undo removal of $name" }) { Text("Undo") }
         }
-        Column(Modifier.fillMaxWidth().weight(1f)
-            .verticalScroll(if (page == "main") mainScroll else key(page, symptom) { rememberScrollState() }, overscrollEffect = null)
-            .padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text(title, style = MaterialTheme.typography.headlineSmall)
-            when (page) {
-                "pins" -> {
-                    Text("Pinned symptoms appear first in your check-ins.")
-                    symptomLabels.forEach { name ->
-                        AnswerTile("Pin symptom", name, name in diary.prefs.pins, Modifier.fillMaxWidth()) {
-                            edit { d -> d.copy(prefs = d.prefs.copy(pins = d.prefs.pins.toggle(name))) }
-                        }
-                    }
-                }
-                "symptom" -> {
-                    val selected = check?.symptoms?.get(symptom)
-                    AnswerGrid(symptom, severityLabels, selected) { value ->
-                        edit { d -> d.changeCheck(date, slot) { it.copy(symptoms = it.symptoms + (symptom to value)) } }
-                    }
-                    Text("Mild means noticeable, I could carry on. Moderate means I had to adjust what I was doing.")
-                    if (selected != null) TextButton(onClick = {
-                        edit { d -> d.changeCheck(date, slot) { it.copy(symptoms = it.symptoms - symptom) } }
-                    }) { Text("Clear symptom rating") }
-                }
-                "corrections" -> {
-                    fun clearCheck(update: (Check) -> Check) = edit { it.changeCheck(date, slot, update) }
-                    fun clearDay(update: (Day) -> Day) = edit { it.changeDay(date, update) }
-                    ClearAnswer("Energy", check?.energy?.let(energyLabels::get)) { clearCheck { it.copy(energy = null) } }
-                    if (slot == "am") {
-                        ClearAnswer("Waking refreshment", check?.sleep?.let(sleepLabels::get)) { clearCheck { it.copy(sleep = null) } }
-                    } else {
-                        ClearAnswer("Overall wellbeing", day?.wellbeing?.let(wellbeingLabels::get)) { clearDay { it.copy(wellbeing = null) } }
-                    }
-                }
-                else -> {
-                    if (slot == "pm") {
-                        OptionalField("Did symptoms change your plans?", listOf("As planned", "Slowed down", "Dropped something", "Needed help"), day?.impact) { value ->
-                            edit { d -> d.changeDay(date) { it.copy(impact = value) } }
-                        }
-                        MultiField("Context", listOf("Fighting a bug", "Unusual stress", "Change in medication"), day?.context.orEmpty()) { value ->
-                            edit { d -> d.changeDay(date) { it.copy(context = it.context.toggle(value)) } }
-                        }
-                    }
-                    QuestionText("Symptoms")
-                    val names = (diary.prefs.pins.sorted() + symptomLabels + check?.symptoms.orEmpty().keys).distinct()
-                    for (name in names) {
-                        val rating = check?.symptoms?.get(name)?.let(severityLabels::get)
-                        DetailLink(listOfNotNull(name, rating).joinToString(" · ")) { symptom = name; page = "symptom" }
-                    }
-                    DetailLink("Change pinned symptoms") { page = "pins" }
-                    DetailLink("Edit check-in answers") { page = "corrections" }
-                    DetailLink("Crash episodes", onClick = episodes)
-                }
+    }
+    Spacer(Modifier.height(8.dp))
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
+        names.forEach { name ->
+            val selected = name in symptoms
+            DiaryChip(name, selected, accent = categoryAccent("Symptoms"), symbol = if (selected) "−" else "+", remove = selected, onClick = {
+                removedName = name.takeIf { selected }
+                removedRating = symptoms[name] ?: UNRATED_SYMPTOM
+                edit { d -> d.changeCheck(date, slot) {
+                    it.copy(symptoms = if (selected) it.symptoms - name else it.symptoms + (name to UNRATED_SYMPTOM))
+                } }
+            }, modifier = Modifier.heightIn(min = 48.dp).semantics {
+                contentDescription = if (selected) "Remove $name" else "Select $name"
+            })
+        }
+    }
+    for (name in names.filter { it in symptoms }) {
+        Spacer(Modifier.height(16.dp))
+        Text(name, style = MaterialTheme.typography.titleMedium)
+        Spacer(Modifier.height(6.dp))
+        AnswerGrid(name, severityLabels, symptoms[name]) { rating ->
+            edit { d -> d.changeCheck(date, slot) { val value = if (it.symptoms[name] == rating) UNRATED_SYMPTOM else rating
+                it.copy(symptoms = it.symptoms + (name to value)) } }
+        }
+
+    }
+
+    DetailLink("Change pinned symptoms", if (editingPins) "⌃" else "⌄") { editingPins = !editingPins }
+    if (editingPins) {
+        Text("Pinned symptoms appear first in your check-ins.")
+        for (name in (symptomLabels + symptoms.keys.sorted() + pins.sorted()).distinct()) {
+            AnswerTile("Pin symptom", name, name in pins, Modifier.fillMaxWidth().padding(top = 6.dp)) {
+                edit { d -> d.copy(prefs = d.prefs.copy(pins = d.prefs.pins.toggle(name))) }
             }
         }
-        Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
-            SaveNotice(status, retry, Modifier.weight(1f))
-            TextButton(onClick = ::back) { Text(if (page == "main") "Done" else "Back") }
+    }
+    if (slot == "pm") {
+        OptionalField("Did symptoms change your plans?", listOf("As planned", "Slowed down", "Dropped something", "Needed help"), day?.impact) { value ->
+            edit { d -> d.changeDay(date) { it.copy(impact = value) } }
+        }
+        MultiField("Context", listOf("Fighting a bug", "Unusual stress", "Change in medication"), day?.context.orEmpty()) { value ->
+            edit { d -> d.changeDay(date) { it.copy(context = it.context.toggle(value)) } }
+        }
+    }
+    DetailLink("Edit check-in answers", if (correcting) "⌃" else "⌄") { correcting = !correcting }
+    if (correcting) {
+        fun clearCheck(update: (Check) -> Check) = edit { it.changeCheck(date, slot, update) }
+        ClearAnswer("Energy", check?.energy?.let(energyLabels::get)) { clearCheck { it.copy(energy = null) } }
+        if (slot == "am") {
+            ClearAnswer("Waking refreshment", check?.sleep?.let(sleepLabels::get)) { clearCheck { it.copy(sleep = null) } }
+        } else {
+            ClearAnswer("Overall wellbeing", day?.wellbeing?.let(wellbeingLabels::get)) { edit { d -> d.changeDay(date) { it.copy(wellbeing = null) } } }
         }
     }
 }
@@ -113,19 +112,5 @@ internal fun MultiField(label: String, choices: List<String>, value: Set<String>
     DetailLink(if (value.isEmpty()) label else "$label · ${value.sorted().joinToString()}", if (expanded) "⌃" else "⌄") { expanded = !expanded }
     if (expanded) choices.forEach { name ->
         AnswerTile(label, name, name in value, Modifier.fillMaxWidth()) { toggle(name) }
-    }
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-internal fun DiaryDetailSheet(onDismiss: () -> Unit, content: @Composable ColumnScope.() -> Unit) {
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-        sheetGesturesEnabled = false,
-        dragHandle = null,
-        containerColor = MaterialTheme.colorScheme.surface
-    ) {
-        Column(Modifier.fillMaxWidth().fillMaxHeight(.9f).padding(top = 16.dp), content = content)
     }
 }

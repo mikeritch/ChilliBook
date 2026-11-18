@@ -1,5 +1,12 @@
 package uk.chillibook.diary
 
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.selection.toggleable
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.luminance
 import android.app.DatePickerDialog
 import android.content.Context
 import androidx.compose.foundation.*
@@ -36,25 +43,60 @@ internal fun chooseDiaryDate(context: Context, date: String, min: String? = null
 
 @Composable
 internal fun QuestionText(text: String) {
-    Text(text, style = MaterialTheme.typography.titleMedium.copy(fontSize = 18.sp, lineHeight = 23.sp),
-        fontWeight = FontWeight.SemiBold, modifier = Modifier.semantics { heading() })
+    val icon = when (text) {
+        "How much energy do you have now?" -> R.drawable.diary_spark
+        "How refreshed did you feel on waking?" -> R.drawable.diary_pillow
+        "How did today feel overall?" -> R.drawable.diary_bloom
+        "What did you do?" -> R.drawable.diary_sprout
+        "Symptoms" -> R.drawable.symbook
+        else -> null
+    }
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        icon?.let { DiaryIcon(it, when (it) {
+            R.drawable.diary_spark -> categoryAccent("Household")
+            R.drawable.diary_pillow -> categoryAccent("Work")
+            R.drawable.symbook, R.drawable.diary_bloom -> categoryAccent("Symptoms")
+            else -> MaterialTheme.colorScheme.primary
+        }) }
+        Text(text, style = MaterialTheme.typography.titleMedium.copy(fontSize = 18.sp, lineHeight = 24.sp),
+            fontWeight = FontWeight.SemiBold, modifier = Modifier.semantics { heading() })
+    }
+}
+
+// A quick tap inside a scrolling column can finish before the delayed press indication.
+@Composable
+private fun selectionScale(selected: Boolean, pressed: Boolean): Float {
+    val press by animateFloatAsState(if (pressed) .94f else 1f, tween(85), label = "press")
+    val pulse = remember { Animatable(1f) }
+    var previous by remember { mutableStateOf(selected) }
+    LaunchedEffect(selected) {
+        if (previous != selected) {
+            previous = selected
+            pulse.snapTo(.95f)
+            pulse.animateTo(1f, tween(180))
+        }
+    }
+    return minOf(press, pulse.value)
 }
 
 @Composable
 internal fun AnswerTile(question: String, label: String, active: Boolean, modifier: Modifier = Modifier,
-                        rank: Int? = null, compact: Boolean = false, onClick: () -> Unit) {
+                        rank: Int? = null, compact: Boolean = false, accent: Color? = null, onClick: () -> Unit) {
     val colors = MaterialTheme.colorScheme
-    val ink = if (active) colors.onPrimary else colors.onSurface
+    val tone = accent ?: colors.primary
+    val ink = if (active) (if (tone.luminance() > .36f) Color(0xFF192421) else Color.White) else colors.onSurface
     val shape = RoundedCornerShape(12.dp)
     val interactions = remember { MutableInteractionSource() }
     val pressed by interactions.collectIsPressedAsState()
-    val fill = if (active) colors.primary else colors.surface
+    val shrink = selectionScale(active, pressed)
+    val fill = if (active) tone else tone.copy(alpha = if (accent != null) .13f else .06f).compositeOver(colors.surface)
     val background = if (pressed) ink.copy(alpha = .10f).compositeOver(fill) else fill
-    Box(modifier.clip(shape).background(background)
-        .border(1.dp, if (active) colors.primary else colors.outline, shape)
+    Box(modifier.clip(shape)
         .selectable(active, interactionSource = interactions, indication = LocalIndication.current,
             role = Role.RadioButton, onClick = onClick)
         .semantics { contentDescription = "$question, $label" }
+        .graphicsLayer { scaleX = shrink; scaleY = shrink }.background(background, shape)
+        .border(1.dp, if (active) tone else tone.copy(alpha = .22f), shape)
         .heightIn(min = if (rank == null) 48.dp else 68.dp),
         contentAlignment = Alignment.Center) {
         // Reserve the tick space in both states so selecting a tile never moves its label.
@@ -66,7 +108,7 @@ internal fun AnswerTile(question: String, label: String, active: Boolean, modifi
                 Canvas(Modifier.size(28.dp, 12.dp)) {
                     for (i in 0..4) {
                         val h = size.height * (0.22f + i * 0.17f)
-                        drawRoundRect(if (i <= rank) ink else ink.copy(alpha = .25f),
+                        drawRoundRect(if (i <= rank) (if (active) ink else tone) else tone.copy(alpha = .25f),
                             Offset(i * size.width / 5, size.height - h), Size(size.width / 7, h), CornerRadius(1.dp.toPx()))
                     }
                 }
@@ -92,13 +134,13 @@ internal fun AnswerGrid(question: String, labels: List<String>, selected: Int?, 
         val scale = LocalDensity.current.fontScale
         val minimum = (if (columns == 5) 60 else 118) * scale
         val cols = (maxWidth.value / minimum).toInt().coerceIn(1, columns)
-        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             labels.indices.chunked(cols).forEach { indices ->
-                Row(horizontalArrangement = Arrangement.spacedBy(if (cols == 5) 4.dp else 6.dp),
+                Row(horizontalArrangement = Arrangement.spacedBy(if (cols == 5) 6.dp else 8.dp),
                     modifier = Modifier.height(IntrinsicSize.Min)) {
                     indices.forEach { i ->
                         AnswerTile(question, labels[i], selected == i, Modifier.weight(1f).fillMaxHeight(),
-                            if (bars) i else null, compact = columns == 5) { onChoice(i) }
+                            if (bars) i else null, compact = columns == 5, accent = scaleAccent(labels, i)) { onChoice(i) }
                     }
                     repeat(cols - indices.size) { Spacer(Modifier.weight(1f)) }
                 }
@@ -123,5 +165,30 @@ internal fun DetailLink(label: String, trailing: String = "›", icon: Int? = nu
         Text(label, Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
         Text(trailing, color = MaterialTheme.colorScheme.primary, fontSize = 22.sp)
     }
-    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+}
+
+@Composable
+internal fun DiaryChip(label: String, selected: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier,
+                       symbol: String? = null, accent: Color = MaterialTheme.colorScheme.primary,
+                       remove: Boolean = false) {
+    val interactions = remember { MutableInteractionSource() }
+    val pressed by interactions.collectIsPressedAsState()
+    val scale = selectionScale(selected, pressed)
+    val shape = RoundedCornerShape(15.dp)
+    val colors = MaterialTheme.colorScheme
+    val alpha = when { pressed -> .30f; selected -> .20f; else -> .06f }
+    Row(modifier.heightIn(min = 48.dp).clip(shape)
+        .toggleable(value = selected, interactionSource = interactions, indication = LocalIndication.current,
+            role = Role.Checkbox, onValueChange = { onClick() })
+        .graphicsLayer { scaleX = scale; scaleY = scale }.background(accent.copy(alpha = alpha).compositeOver(colors.surface), shape)
+        .border(1.dp, accent.copy(alpha = if (selected) .75f else .15f), shape).padding(horizontal = 13.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+        if (symbol != null) {
+            Box(Modifier.width(18.dp), contentAlignment = Alignment.Center) {
+                Text(symbol, color = if (remove) colors.error else accent, fontWeight = FontWeight.Bold)
+            }
+        }
+        Text(label, style = MaterialTheme.typography.bodyMedium, color = if (selected) accent else colors.onSurface,
+            fontWeight = if (selected) FontWeight.Medium else FontWeight.Normal)
+    }
 }

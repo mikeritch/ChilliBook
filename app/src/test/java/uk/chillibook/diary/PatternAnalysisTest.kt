@@ -16,7 +16,6 @@ class PatternAnalysisTest {
                 Check(wednesday.toString(), "am", energy = 1)),
             activities = listOf(ActivityEntry(date = monday.toString(), tags = setOf("Call"), worth = "Yes"),
                 ActivityEntry(date = monday.toString(), tags = setOf("Visit"))),
-            episodes = listOf(Episode(start = monday.plusDays(1).toString()))
         ))
         for (factor in listOf(Factor.Work, Factor.Social)) {
             val missing = index.compare(monday.minusWeeks(1), monday, wednesday, factor, FollowUp.Next)
@@ -38,14 +37,18 @@ class PatternAnalysisTest {
                 ActivityEntry(date = it.toString(), tags = setOf("Call"))
             },
             checks = listOf(Check(monday.toString(), "am", symptoms = mapOf("Headache" to 0)),
-                Check(mid.toString(), "am", energy = 1),
+                Check(mid.toString(), "am", energy = 1, symptoms = mapOf("Headache" to UNRATED_SYMPTOM)),
                 Check(wednesday.toString(), "pm", symptoms = mapOf("Headache" to 3)))
         ))
         val social = index.activityDates(monday, wednesday, "Socialising")
         assertEquals(mapOf(true to listOf(monday), false to listOf(mid), null to listOf(wednesday)), social)
         assertEquals(mapOf(true to listOf(monday), null to listOf(mid, wednesday)),
             index.activityDates(monday, wednesday, "Call"))
-        assertEquals(mapOf(0 to listOf(monday), null to listOf(mid, wednesday)),
+        val ratings = index.monthly(monday, wednesday, "Headache", 4).getValue(YearMonth.from(monday)).getValue("am")
+        assertEquals(2, ratings.recorded)
+        assertEquals(1, ratings.unrated)
+        assertEquals(1, ratings.counts[0])
+        assertEquals(mapOf(0 to listOf(monday), UNRATED_SYMPTOM to listOf(mid), null to listOf(wednesday)),
             index.symptomDates(monday, wednesday, "Headache", "am"))
         assertEquals(mapOf(3 to listOf(wednesday), null to listOf(monday, mid)),
             index.symptomDates(monday, wednesday, "Headache", "pm"))
@@ -79,12 +82,12 @@ class PatternAnalysisTest {
             days = dates.mapIndexed { i, d -> Day(d.toString(), work = i % 2 == 0) }))
         val months = index.monthly(start, dates.last(), null, 5)
         assertEquals(12, months.size)
-        assertEquals(16, months.getValue(YearMonth.of(2025, 1)).getValue("pm")[4])
+        assertEquals(16, months.getValue(YearMonth.of(2025, 1)).getValue("pm").counts[4])
         for (slot in listOf("am", "pm")) {
-            assertEquals(checks.count { it.slot == slot }, months.values.sumOf { it.getValue(slot).sum() })
+            assertEquals(checks.count { it.slot == slot }, months.values.sumOf { it.getValue(slot).recorded })
         }
         val severity = index.monthly(start, dates.last(), "Brain fog", 4)
-        assertEquals(checks.count { "Brain fog" in it.symptoms }, severity.values.sumOf { it.getValue("am")[0] })
+        assertEquals(checks.count { "Brain fog" in it.symptoms }, severity.values.sumOf { it.getValue("am").counts[0] })
         val result = index.compare(start, dates.last(), dates.last(), Factor.Work, FollowUp.Evening)
         assertEquals(183, result.yes.usable)
         assertEquals(182, result.no.missing)

@@ -10,6 +10,17 @@ internal enum class FollowUp(val label: String, val lag: Long) {
     Evening("Same evening’s energy", 0), Wellbeing("Same day’s wellbeing", 0)
 }
 
+internal fun symptomRatingLabel(value: Int?) = when (value) {
+    UNRATED_SYMPTOM -> "Severity not rated"
+    else -> value?.let(severityLabels::getOrNull) ?: "Not recorded"
+}
+
+internal class MonthlyRatings(levels: Int) {
+    val counts = IntArray(levels)
+    var unrated = 0
+    val recorded get() = counts.sum() + unrated
+}
+
 internal data class DatePair(val anchor: LocalDate, val follow: LocalDate, val level: Int?)
 internal class ComparisonGroup(val dates: List<DatePair>) {
     val counts = IntArray(5).apply { dates.forEach { pair -> pair.level?.let { this[it]++ } } }
@@ -27,7 +38,7 @@ internal class PatternIndex(val diary: Diary) {
     val checks = diary.checks.associateBy { it.date to it.slot }
     val activities = diary.activities.groupBy { it.date }
     val first = (days.keys.asSequence() + diary.checks.asSequence().map { it.date } +
-        activities.keys.asSequence() + diary.episodes.asSequence().map { it.start }).minOrNull()?.let(LocalDate::parse)
+        activities.keys.asSequence()).minOrNull()?.let(LocalDate::parse)
 
     fun status(date: LocalDate, factor: Factor): Boolean? {
         val key = date.toString()
@@ -76,18 +87,20 @@ internal class PatternIndex(val diary: Diary) {
         return Comparison(ComparisonGroup(yes), ComparisonGroup(no), unknown)
     }
 
-    fun monthly(start: LocalDate, end: LocalDate, symptom: String?, levels: Int): Map<YearMonth, Map<String, IntArray>> {
-        val result = linkedMapOf<YearMonth, Map<String, IntArray>>()
+    fun monthly(start: LocalDate, end: LocalDate, symptom: String?, levels: Int): Map<YearMonth, Map<String, MonthlyRatings>> {
+        val result = linkedMapOf<YearMonth, Map<String, MonthlyRatings>>()
         var month = YearMonth.from(start)
         while (month <= YearMonth.from(end)) {
-            result[month] = mapOf("am" to IntArray(levels), "pm" to IntArray(levels))
+            result[month] = mapOf("am" to MonthlyRatings(levels), "pm" to MonthlyRatings(levels))
             month = month.plusMonths(1)
         }
         for (check in diary.checks) {
             val date = LocalDate.parse(check.date)
             if (date < start || date > end) continue
             val value = if (symptom == null) check.energy else check.symptoms[symptom]
-            if (value != null) result.getValue(YearMonth.from(date)).getValue(check.slot)[value]++
+            val ratings = result.getValue(YearMonth.from(date)).getValue(check.slot)
+            if (value == UNRATED_SYMPTOM && symptom != null) ratings.unrated++
+            else if (value != null && value in ratings.counts.indices) ratings.counts[value]++
         }
         return result
     }

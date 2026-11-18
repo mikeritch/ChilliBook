@@ -27,7 +27,6 @@ class DiaryResetTest {
         val fixture = Diary(days = listOf(Day(date, work = false)),
             checks = listOf(Check(date, "am", energy = 1)),
             activities = listOf(ActivityEntry(date = date, tags = setOf("Hobby"))),
-            episodes = listOf(Episode(start = date)),
             prefs = Prefs(theme = "dark", pins = emptySet(), eveningReminder = 1200))
         val delivery = context.getSharedPreferences("reminder_delivery", Context.MODE_PRIVATE)
         Storage(context).use { storage ->
@@ -49,10 +48,6 @@ class DiaryResetTest {
                     instrumentation.sendKeyDownUpSync(KeyEvent.KEYCODE_BACK)
                     compose.onNodeWithText("Permanently erase diary").assertDoesNotExist()
                     assertEquals(fixture, runBlocking { storage.read() })
-                    compose.onNodeWithText("Today").performClick()
-                    compose.onNodeWithText("Back to my usual").performScrollTo().performClick()
-                    compose.onNodeWithText("Undo").assertExists()
-                    compose.onNodeWithContentDescription("Settings").performClick()
                     reset.performScrollTo().performClick()
                     compose.onNodeWithText("Continue").performClick()
                     compose.onNodeWithText("Permanently erase diary").performClick()
@@ -61,7 +56,6 @@ class DiaryResetTest {
                     }
                     assertTrue(delivery.all.isEmpty())
                     compose.onNodeWithText("Today").performClick()
-                    compose.onNodeWithText("Crash started").performScrollTo().assertIsDisplayed()
                     compose.onNodeWithText("Undo").assertDoesNotExist()
                 }
                 Storage(context).use { reopened -> assertEquals(Diary(), runBlocking { reopened.read() }) }

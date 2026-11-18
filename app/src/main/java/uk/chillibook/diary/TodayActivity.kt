@@ -40,7 +40,7 @@ internal fun EveningActivities(diary: Diary, date: String, edit: DiaryEdit) {
     val presetsByGroup = categoryTags.mapValues { (group, tags) -> tags.filter { it != group } } +
         ("Other" to otherTags + customTags)
     fun simpleEntry(tag: String) = byTag[activityTagKey(tag)]?.singleOrNull()?.takeIf { it.tags.size == 1 }
-    fun notify(group: String, message: String) {
+    fun showAction(group: String, message: String) {
         removed = null
         feedback = group to message
     }
@@ -49,12 +49,13 @@ internal fun EveningActivities(diary: Diary, date: String, edit: DiaryEdit) {
             if (tag !in recentCustomTags) recentCustomTags = ArrayList(recentCustomTags + tag)
         }
         edit { it.removeActivity(entry) }
-        notify(group, "${entry.summary()} removed")
+        showAction(group, "${entry.summary()} removed")
         removed = entry
     }
     fun add(group: String, tag: String) {
         edit { it.addActivity(ActivityEntry(date = date, tags = setOf(tag))) }
-        notify(group, "✓  ${tagLabel(tag)} selected")
+        feedback = null
+        removed = null
     }
     QuestionText("What did you do?")
     activityGroups.forEach { (group, title) ->
@@ -62,47 +63,44 @@ internal fun EveningActivities(diary: Diary, date: String, edit: DiaryEdit) {
         val presets = presetsByGroup.getValue(group)
         val tagged = entries.filter { entry -> entry.tags.any { it in categoryTags[group].orEmpty() } }
         val answer = activityFlag(day, entries, group)
-        HorizontalDivider(Modifier.padding(vertical = 8.dp))
-        if (other) Text(title, style = MaterialTheme.typography.titleMedium)
+        Spacer(Modifier.height(22.dp))
+        if (other) Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            DiaryIcon(R.drawable.diary_sprout, categoryAccent(group))
+            Text(title, style = MaterialTheme.typography.titleMedium)
+        }
         else {
             YesNoRow(title, answer, group) { value ->
                 val next = value.takeUnless { it == answer }
                 if (next != true && tagged.isNotEmpty()) {
-                    notify(group, "Remove the selected activities or edit their tags before changing this answer.")
+                    showAction(group, "Remove the selected activities or edit their tags before changing this answer.")
                 } else {
                     edit { d -> d.changeDay(date) { it.setFlag(group, next) } }
-                    notify(group, if (next == null) "Answer cleared" else "✓  $title answered")
+                    feedback = null
+                    removed = null
                 }
             }
             if (tagged.isNotEmpty() && day?.flag(group) == false)
                 Text("Your earlier No returns when you remove the matching tags.", style = MaterialTheme.typography.bodySmall)
-            if (group == "Work" && answer == false)
-                OptionalField("Reason for no work", listOf("Planned day off", "Off sick", "Other"), day?.workOff) { value ->
-                    edit { d -> d.changeDay(date) { it.copy(workOff = value) } }
-                }
+
         }
         if (other || answer == true) {
-            if (!other) Text("Choose activities (optional)", style = MaterialTheme.typography.bodySmall)
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            Spacer(Modifier.height(8.dp))
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 presets.forEach { tag ->
                     val matches = byTag[activityTagKey(tag)].orEmpty()
                     val on = matches.isNotEmpty()
                     val simple = simpleEntry(tag)
                     val label = tagLabel(tag)
                     val action = if (!on) "Select" else if (simple != null) "Remove" else "Review"
-                    FilterChip(on, onClick = {
+                    DiaryChip(label, on, onClick = {
                         when {
                             !on -> add(group, tag)
                             simple != null -> remove(group, simple)
                             else -> reviewTag = tag
                         }
-                    }, modifier = Modifier.semantics { contentDescription = "$action $label" }, label = { Text(label) },
-                        leadingIcon = {
-                            Box(Modifier.width(18.dp), contentAlignment = Alignment.Center) {
-                                Text(if (!on) "+" else if (simple != null) "−" else "›",
-                                    color = if (simple != null) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary)
-                            }
-                        })
+                    }, modifier = Modifier.semantics { contentDescription = "$action $label" },
+                        symbol = if (!on) "+" else if (simple != null) "−" else "›",
+                        accent = categoryAccent(group), remove = simple != null)
                 }
                 if (other) TextButton(onClick = { custom = !custom; name = "" }) { Text("Write your own") }
             }
@@ -114,7 +112,7 @@ internal fun EveningActivities(diary: Diary, date: String, edit: DiaryEdit) {
                         val label = name.trim()
                         val tag = presets.firstOrNull { tagLabel(it).equals(label, ignoreCase = true) } ?: customActivityTag(label)
                         if (entries.any { it.hasActivityTag(tag) })
-                            notify(group, "${tagLabel(tag)} is already selected")
+                            showAction(group, "${tagLabel(tag)} is already selected")
                         else add(group, tag)
                         name = ""; custom = false
                     }) { Text("Add activity") }
@@ -127,11 +125,12 @@ internal fun EveningActivities(diary: Diary, date: String, edit: DiaryEdit) {
                 style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
             removed?.let { entry -> TextButton(onClick = {
                 edit { it.restoreActivity(entry) }
-                notify(group, "Activity and details restored")
+                feedback = null
+                removed = null
             }) { Text("Undo") } }
         }
         presets.mapNotNull(::simpleEntry).forEach { entry ->
-            key(entry.id) { ActivityDetails(entry, edit) { notify(group, "✓  ${tagLabel(entry.tags.single())} updated") } }
+            key(entry.id) { ActivityDetails(entry, edit) }
         }
     }
     val inlineEntries = presetsByGroup.values.flatten().mapNotNull(::simpleEntry).toSet()
@@ -160,14 +159,13 @@ internal fun EveningActivities(diary: Diary, date: String, edit: DiaryEdit) {
 }
 
 @Composable
-private fun ActivityDetails(activity: ActivityEntry, edit: DiaryEdit, changed: () -> Unit) {
-    Column(Modifier.fillMaxWidth().padding(vertical = 4.dp)
-        .background(MaterialTheme.colorScheme.primary.copy(alpha = .07f), RoundedCornerShape(8.dp)).padding(10.dp)) {
+private fun ActivityDetails(activity: ActivityEntry, edit: DiaryEdit) {
+    Column(Modifier.fillMaxWidth().padding(vertical = 12.dp)
+        .background(MaterialTheme.colorScheme.primary.copy(alpha = .07f), RoundedCornerShape(18.dp)).padding(16.dp)) {
         Text(tagLabel(activity.tags.single()), style = MaterialTheme.typography.titleMedium)
         Text("Optional details", style = MaterialTheme.typography.bodySmall)
         DetailChoices(activity) { change ->
             edit { diary -> diary.copy(activities = diary.activities.map { if (it.id == activity.id) change(it) else it }) }
-            changed()
         }
     }
 }
@@ -228,10 +226,12 @@ private fun ActivityChoice(label: String, choices: List<String>, selected: Strin
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun ActivityChips(label: String, choices: List<String>, selected: Set<String>, toggle: (String) -> Unit) {
+    Spacer(Modifier.height(14.dp))
     Text(label, style = MaterialTheme.typography.titleSmall)
-    FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+    Spacer(Modifier.height(6.dp))
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         (choices + selected).distinct().forEach { choice ->
-            FilterChip(selected = choice in selected, onClick = { toggle(choice) }, label = { Text(choice) })
+            DiaryChip(choice, choice in selected, onClick = { toggle(choice) })
         }
     }
 }

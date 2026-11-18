@@ -4,18 +4,27 @@ import json
 from pathlib import Path
 
 
-def normalized(path):
+def normalized(path, *, candidate=False):
     with path.open(encoding="utf-8") as stream:
         data = json.load(stream)
-    if data.get("format") != "ChilliBook" or data["version"] not in (1, 2):
+    if data.get("format") != "ChilliBook" or data["version"] not in (1, 2, 3):
         raise ValueError("Unsupported rehearsal export")
-    if data["version"] == 1:
+    version = data["version"]
+    if candidate and version != 3:
+        raise ValueError("Expected a format 3 export from the updated app")
+    if version < 3:
+        del data["episodes"]
+        for day in data["days"]:
+            del day["workOff"]
+    elif "episodes" in data or any("workOff" in day for day in data["days"]):
+        raise ValueError("Retired fields in format 3 export")
+    if version == 1:
         data["prefs"]["morningReminder"] = None
         data["prefs"]["eveningReminder"] = None
-        data["version"] = 2
+    data["version"] = 3
     data["prefs"]["pins"].sort()
     for table, keys in {"days": ("date",), "checks": ("date", "slot"),
-                        "activities": ("id",), "episodes": ("id",)}.items():
+                        "activities": ("id",)}.items():
         rows = data[table]
         for row in rows:
             for key in ("tags", "demands", "context"):
@@ -30,7 +39,7 @@ if __name__ == "__main__":
     parser.add_argument("before", type=Path)
     parser.add_argument("after", type=Path)
     args = parser.parse_args()
-    before, after = normalized(args.before), normalized(args.after)
+    before, after = normalized(args.before), normalized(args.after, candidate=True)
     if before != after:
         raise SystemExit("Mismatch in rehearsal exports. Inspect the synthetic fixture before release.")
     print("Every record, ID, date, value and preference matches the expected migration.")

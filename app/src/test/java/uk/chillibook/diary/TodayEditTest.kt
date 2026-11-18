@@ -20,14 +20,13 @@ class TodayEditTest {
     }
 
     @Test fun removingTaggedActivityRestoresExplicitNoAndSickDayReason() {
-        val day = Day(date, work = false, workOff = "Off sick")
+        val day = Day(date, work = false)
         val entry = ActivityEntry(date = date, tags = setOf("Meetings", "Visit"))
         assertEquals(true, activityFlag(day, listOf(entry), "Work"))
         assertEquals(true, activityFlag(day, listOf(entry), "Socialising"))
         val restored = Diary(days = listOf(day), activities = listOf(entry)).copy(activities = emptyList())
         assertEquals(false, activityFlag(restored.days.single(), restored.activities, "Work"))
         assertNull(activityFlag(restored.days.single(), restored.activities, "Socialising"))
-        assertEquals("Off sick", restored.days.single().workOff)
         assertTrue(restored.changeDay(date) { it.setFlag("Work", null) }.days.isEmpty())
     }
 }

@@ -89,11 +89,11 @@ fun SettingsScreen(
             }
         }
         if (!status.contains("reset", ignoreCase = true)) SaveNotice(status, retry)
-        HorizontalDivider()
+        Spacer(Modifier.height(10.dp))
         ReminderSettings(diary.prefs, edit)
-        HorizontalDivider()
+        Spacer(Modifier.height(10.dp))
         UpdateSettings()
-        HorizontalDivider()
+        Spacer(Modifier.height(10.dp))
         QuestionText("Your diary backup")
         Text("A backup contains readable health data, including your entries and settings. The location you choose may sync the file to the cloud.")
         Button(onClick = {
@@ -111,7 +111,7 @@ fun SettingsScreen(
         if (fileStatus.isNotEmpty()) {
             Text(fileStatus, Modifier.semantics { liveRegion = LiveRegionMode.Polite })
         }
-        HorizontalDivider()
+        Spacer(Modifier.height(10.dp))
         OutlinedButton(onClick = { resetStep = 1 }, enabled = !busy && !resetting,
             modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
             Text("Reset all diary data", color = MaterialTheme.colorScheme.error)
@@ -127,7 +127,7 @@ fun SettingsScreen(
             title = { Text(if (final) "Permanently erase this diary?" else "Reset all diary data?") },
             text = {
                 Text(if (final) "Every entry on this device will be permanently deleted. This cannot be undone."
-                    else "This permanently removes your check-ins, activities and crash history, resets your settings and turns off reminders. Backups you exported are kept.")
+                    else "This permanently removes your check-ins and activities, resets your settings and turns off reminders. Backups you exported are kept.")
             },
             confirmButton = {
                 TextButton(onClick = {
@@ -151,7 +151,7 @@ fun SettingsScreen(
                         1 -> dates.first()
                         else -> "${dates.first()} to ${dates.last()}"
                     })
-                    Text("${imported.days.size} day records\n${imported.checks.size} check-ins\n${imported.activities.size} activity entries\n${imported.episodes.size} crash episodes")
+                    Text("${imported.days.size} day records\n${imported.checks.size} check-ins\n${imported.activities.size} activity entries")
                     Text("Restoring this backup replaces all entries and settings on this device.")
                 }
             }, confirmButton = {

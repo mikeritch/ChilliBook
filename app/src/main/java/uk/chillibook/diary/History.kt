@@ -71,7 +71,6 @@ private fun HistoryRow(diary: Diary,date: LocalDate, open: () -> Unit) {
     val day = diary.days.find { it.date == key }
     val activities = diary.activities.filter { it.date == key }
     val categories = categoryTags.keys.filter { activityFlag(day,activities,it) == true }
-    val crash = diary.episodes.firstOrNull { it.start <= key && (it.end == null || it.end >= key) }
     val colors = MaterialTheme.colorScheme
     Row(Modifier.fillMaxWidth().clickable(role=Role.Button,onClick=open).heightIn(min=80.dp)
         .padding(vertical=10.dp),verticalAlignment=Alignment.CenterVertically) {
@@ -80,7 +79,7 @@ private fun HistoryRow(diary: Diary,date: LocalDate, open: () -> Unit) {
             Text(date.dayOfMonth.toString(),fontSize=25.sp,fontFamily=FontFamily.Serif)
         }
         Column(Modifier.weight(1f),verticalArrangement=Arrangement.spacedBy(5.dp)) {
-            if (checks.isEmpty() && day == null && activities.isEmpty() && crash == null) Text("No entry",color=colors.onSurfaceVariant)
+            if (checks.isEmpty() && day == null && activities.isEmpty()) Text("No entry",color=colors.onSurfaceVariant)
             else {
                 @Composable fun SlotLabel(slot:String) {
                     val level = checks.find { it.slot == slot }?.energy?.let(energyLabels::get) ?: "—"
@@ -101,13 +100,12 @@ private fun HistoryRow(diary: Diary,date: LocalDate, open: () -> Unit) {
                     Icon(painterResource(icon),null,Modifier.size(16.dp),tint=colors.onSurfaceVariant)
                     Text("  "+labels.joinToString(" · "),style=MaterialTheme.typography.bodySmall,color=colors.onSurfaceVariant)
                 }
-                if (crash != null) Text(when(key){crash.start -> "Crash started"; crash.end -> "Back to usual"; else -> "During crash"},
-                    style=MaterialTheme.typography.bodySmall,color=colors.tertiary)
+
             }
         }
         Text("›",Modifier.padding(start=6.dp),color=colors.onSurfaceVariant)
     }
-    HorizontalDivider(color=colors.outlineVariant)
+
 }
 
 @Composable
@@ -116,29 +114,30 @@ fun DateDetail(diary: Diary,date: String,edit:(String)->Unit) {
     val day = diary.days.find { it.date == date }
     val activities = diary.activities.filter { it.date == date }
     val checks = diary.checks.filter { it.date == date }
-    val episodes = diary.episodes.filter { it.start <= date && (it.end == null || it.end >= date) }
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal=20.dp),
         verticalArrangement=Arrangement.spacedBy(8.dp)) {
         Text(local.label("EEEE"),fontFamily=FontFamily.Serif,fontSize=38.sp,lineHeight=44.sp)
         Text(local.label("d MMMM yyyy"),color=MaterialTheme.colorScheme.onSurfaceVariant)
-        if (checks.isEmpty() && day == null && activities.isEmpty() && episodes.isEmpty()) Text("No entry")
+        if (checks.isEmpty() && day == null && activities.isEmpty()) Text("No entry")
         for ((slot, label) in listOf("am" to "Morning","pm" to "Evening")) {
-            HorizontalDivider()
+            Spacer(Modifier.height(8.dp))
             Row(verticalAlignment=Alignment.CenterVertically) {
+                Icon(painterResource(if (slot == "am") R.drawable.diary_sun else R.drawable.diary_moon), null,
+                    Modifier.padding(end=8.dp).size(28.dp), tint=androidx.compose.ui.graphics.Color.Unspecified)
                 Text(label,Modifier.weight(1f),fontSize=22.sp,fontFamily=FontFamily.Serif)
                 TextButton(onClick={edit(slot)}) { Text("Edit " + label.lowercase()) }
             }
             val check = checks.find { it.slot == slot }
             Text("Energy · " + (check?.energy?.let(energyLabels::get) ?: "No entry"))
             if (slot == "am") Text("Waking refreshment · " + (check?.sleep?.let(sleepLabels::get) ?: "No entry"))
-            for ((name, value) in check?.symptoms.orEmpty()) Text("$name · ${severityLabels[value]}")
+            for ((name, value) in check?.symptoms.orEmpty()) Text("$name · ${symptomRatingLabel(value)}")
             if (slot == "pm") {
                 Text("Overall wellbeing · " + (day?.wellbeing?.let(wellbeingLabels::get) ?: "No entry"))
                 categoryTags.keys.forEach { name ->
                     val answer = when(activityFlag(day,activities,name)) { true -> "Yes"; false -> "No"; null -> "Unanswered" }
                     Text("$name · $answer")
                 }
-                listOfNotNull(day?.workOff,day?.impact).plus(day?.context.orEmpty()).forEach { Text(it) }
+                listOfNotNull(day?.impact).plus(day?.context.orEmpty()).forEach { Text(it) }
             }
         }
         for (record in activities) {
@@ -151,12 +150,6 @@ fun DateDetail(diary: Diary,date: String,edit:(String)->Unit) {
         if (activities.isNotEmpty()) for(n in 1..2) {
             val energy = diary.checks.find { it.slot == "am" && it.date == local.plusDays(n.toLong()).toString() }?.energy
             Text((if(n==1) "Next morning" else "Two mornings later") + " · " + (energy?.let(energyLabels::get) ?: "No entry"))
-        }
-        for(episode in episodes) {
-            HorizontalDivider()
-            Text("Crash started · " + (if(episode.approxStart) "Around " else "") + episode.start)
-            Text(episode.end?.let { "Back to usual · " + (if(episode.approxEnd) "Around " else "") + it } ?: "Recovery date unknown")
-            episode.worst?.let { Text("Worst symptom · $it") }
         }
         Spacer(Modifier.height(16.dp))
     }

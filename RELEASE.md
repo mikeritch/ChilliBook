@@ -7,7 +7,7 @@
 **Over USB.** Enable USB debugging and authorise the computer on the phone. Place the signed APK beside [Install ChilliBook.command](<release/Install ChilliBook.command>) and double-click the command on macOS. With Android SDK Platform-Tools on your path, you can also run the following from the project root.
 
 ```sh
-adb -d install -r release/ChilliBook-1.3.apk
+adb -d install -r release/ChilliBook-1.4.apk
 ```
 
 ## Back up or move the diary
@@ -26,12 +26,22 @@ Choose **Settings → Back up diary** and select a private destination. The JSON
 apk=app/build/outputs/apk/release/app-release.apk
 apksigner verify --print-certs "$apk"
 aapt dump badging "$apk" | head -1
-version=1.3  # set to the version you just built
+version=1.4  # set to the version you just built
 cp "$apk" "release/ChilliBook-$version.apk"
 git tag "v$version"
 git push origin HEAD "v$version"
 gh release create "v$version" "release/ChilliBook-$version.apk" --verify-tag --generate-notes --latest
 ```
+
+## Release 1.4
+
+Select a symptom directly in the morning or evening check-in, then optionally choose its severity. Tap its minus to remove it. A selected symptom can be saved without a rating. History and Patterns distinguish that from an explicit None and an unanswered symptom.
+
+Check-in choices respond to a tap with a brief press effect and a persistent selected state. Illustrated headings, softer groups and graded answer colours replace repeated rules and routine save messages. Save errors still offer Retry.
+
+**Installing 1.4 permanently removes existing crash episodes and reasons for no work.** The Work Yes/No answer, other diary records and preferences migrate automatically. Importing an older backup into 1.4 skips those two retired fields. Previously exported files remain in their original locations.
+
+A signed 1.3 → 1.4 emulator upgrade retained all 354 day records, 673 check-ins, 154 activities and preferences in the synthetic fixture. An export comparison checked every retained field. Migration tests also exercised the version 1 database and rollback after a failed migration. The symptom flow was checked at normal and 200% text sizes.
 
 ## Release 1.3
 

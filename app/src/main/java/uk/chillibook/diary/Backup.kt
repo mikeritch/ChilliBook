@@ -48,11 +48,11 @@ object Backup {
     private fun <T> rows(values: List<T>, encode: (T) -> JSONObject) = JSONArray(values.map(encode))
 
     fun encode(diary: Diary): String = obj(
-        "format" to "ChilliBook", "version" to 2,
+        "format" to "ChilliBook", "version" to 3,
         "days" to rows(diary.days) { d -> obj(
             "date" to d.date, "work" to d.work, "social" to d.social, "household" to d.household,
             "wellbeing" to d.wellbeing, "impact" to d.impact, "context" to set(d.context),
-            "workOff" to d.workOff, "at" to d.at, "zone" to d.zone
+            "at" to d.at, "zone" to d.zone
         ) },
         "checks" to rows(diary.checks) { c -> obj(
             "date" to c.date, "slot" to c.slot, "energy" to c.energy, "sleep" to c.sleep,
@@ -62,10 +62,6 @@ object Backup {
             "id" to a.id, "date" to a.date, "tags" to set(a.tags), "duration" to a.duration,
             "effort" to a.effort, "demands" to set(a.demands), "worth" to a.worth,
             "workLength" to a.workLength, "workPlace" to a.workPlace, "at" to a.at, "zone" to a.zone
-        ) },
-        "episodes" to rows(diary.episodes) { e -> obj(
-            "id" to e.id, "start" to e.start, "end" to e.end, "approxStart" to e.approxStart,
-            "approxEnd" to e.approxEnd, "worst" to e.worst, "at" to e.at, "zone" to e.zone
         ) },
         "prefs" to obj("id" to diary.prefs.id, "theme" to diary.prefs.theme, "pins" to set(diary.prefs.pins),
             "morningReminder" to diary.prefs.morningReminder, "eveningReminder" to diary.prefs.eveningReminder)
@@ -132,15 +128,16 @@ object Backup {
             result
         }
         val version = root.get("version") as Int
-        require(root.string("format") == "ChilliBook" && version in 1..2)
+        require(root.string("format") == "ChilliBook" && version in 1..3)
         val days = root.records("days", Day::date) {
             Day(date("date"), bool("work"), bool("social"), bool("household"), level("wellbeing", 0..4),
-                text("impact"), strings("context"), text("workOff"), instant(), zone())
+                text("impact"), strings("context"), instant(), zone())
         }
+        val severityRange = (if (version >= 3) UNRATED_SYMPTOM else 0)..3
         val checks = root.records("checks", { c: Check -> c.date to c.slot }) {
             val slot = string("slot").also { require(it in setOf("am", "pm")) }
             val symptoms = getJSONObject("symptoms").let { values ->
-                values.keys().asSequence().associateWith { values.level(it, 0..3) ?: error("Missing severity") }
+                values.keys().asSequence().associateWith { values.level(it, severityRange) ?: error("Missing severity") }
             }
             val sleep = level("sleep", 0..3)
             require(slot == "am" || sleep == null)
@@ -150,13 +147,6 @@ object Backup {
             ActivityEntry(string("id"), date("date"), strings("tags"), text("duration"), text("effort"),
                 strings("demands"), text("worth"), text("workLength"), text("workPlace"), instant(), zone())
         }
-        val episodes = root.records("episodes", Episode::id) {
-            val start = date("start")
-            val end = text("end")?.let(::checkedDate)
-            require(end == null || !LocalDate.parse(end).isBefore(LocalDate.parse(start)))
-            Episode(string("id"), start, end, get("approxStart") as Boolean,
-                get("approxEnd") as Boolean, text("worst"), instant(), zone())
-        }
         val prefs = root.getJSONObject("prefs").run {
             require(get("id") == 1)
             val theme = string("theme").also { require(it in setOf("system", "light", "dark")) }
@@ -164,6 +154,6 @@ object Backup {
                 morningReminder = if (version >= 2) level("morningReminder", 0..1439) else null,
                 eveningReminder = if (version >= 2) level("eveningReminder", 0..1439) else null)
         }
-        return Diary(days, checks, activities, episodes, prefs)
+        return Diary(days, checks, activities, prefs)
     }
 }

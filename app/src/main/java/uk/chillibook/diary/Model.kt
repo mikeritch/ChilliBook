@@ -12,7 +12,7 @@ private fun zoneNow() = ZoneId.systemDefault().id
 @Entity(tableName = "days")
 data class Day(@PrimaryKey val date: String, val work: Boolean? = null, val social: Boolean? = null,
     val household: Boolean? = null, val wellbeing: Int? = null, val impact: String? = null,
-    val context: Set<String> = emptySet(), val workOff: String? = null,
+    val context: Set<String> = emptySet(),
     val at: String = now(), val zone: String = zoneNow())
 
 @Entity(tableName = "checks", primaryKeys = ["date","slot"])
@@ -25,23 +25,20 @@ data class ActivityEntry(@PrimaryKey val id: String = UUID.randomUUID().toString
     val demands: Set<String> = emptySet(), val worth: String? = null, val workLength: String? = null,
     val workPlace: String? = null, val at: String = now(), val zone: String = zoneNow())
 
-@Entity(tableName = "episodes")
-data class Episode(@PrimaryKey val id: String = UUID.randomUUID().toString(), val start: String,
-    val end: String? = null, val approxStart: Boolean = false, val approxEnd: Boolean = false,
-    val worst: String? = null, val at: String = now(), val zone: String = zoneNow())
-
 @Entity(tableName = "prefs")
 data class Prefs(@PrimaryKey val id: Int = 1, val theme: String = "system",
     val pins: Set<String> = setOf("Brain fog","Heavy fatigue"),
     val morningReminder: Int? = null, val eveningReminder: Int? = null)
 
 data class Diary(val days: List<Day> = emptyList(), val checks: List<Check> = emptyList(),
-    val activities: List<ActivityEntry> = emptyList(), val episodes: List<Episode> = emptyList(),
+    val activities: List<ActivityEntry> = emptyList(),
     val prefs: Prefs = Prefs())
 
 val energyLabels = listOf("Very low","Low","Medium","Fairly high","High")
 val sleepLabels = listOf("Unrefreshed","A little","Mostly","Fully")
 val wellbeingLabels = listOf("Very rough","Rough","Mixed","Fairly well","Well")
+// A selected symptom can be saved before the person chooses a severity.
+internal const val UNRATED_SYMPTOM = -1
 val severityLabels = listOf("None","Mild","Moderate","Strong")
 val symptomLabels = listOf("Brain fog","Heavy fatigue","Muscle or joint pain","Headache","Dizzy when upright","Flu-like feeling","Light or sound sensitivity")
 val categoryTags = mapOf(
@@ -61,4 +58,4 @@ fun activityFlag(day: Day?, activities: List<ActivityEntry>, category: String): 
 }
 
 fun Diary.dates(): List<String> = (days.map { it.date } + checks.map { it.date } +
-    activities.map { it.date } + episodes.flatMap { listOfNotNull(it.start,it.end) }).distinct().sorted()
+    activities.map { it.date }).distinct().sorted()
