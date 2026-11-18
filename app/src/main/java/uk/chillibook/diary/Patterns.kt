@@ -16,6 +16,7 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
@@ -78,7 +79,8 @@ fun PatternsScreen(diary: Diary, onDate: (String) -> Unit, onToday: () -> Unit) 
     var factor by rememberSaveable { mutableStateOf(Factor.Work) }
     var outcome by rememberSaveable { mutableStateOf(FollowUp.Next) }
     var metric by rememberSaveable { mutableStateOf<String?>(null) }
-    val symptom = metric?.takeIf { it in diary.prefs.pins }
+    val symptoms = remember(diary.checks) { (symptomLabels + diary.checks.flatMap { it.symptoms.keys }.distinct().sorted()).distinct() }
+    val symptom = metric?.takeIf { it in symptoms }
     val levels = if (symptom == null) energyLabels else severityLabels
     var details by rememberSaveable { mutableStateOf<String?>(null) }
     var selectedMonth by rememberSaveable { mutableStateOf<String?>(null) }
@@ -94,7 +96,7 @@ fun PatternsScreen(diary: Diary, onDate: (String) -> Unit, onToday: () -> Unit) 
     val result = remember(index, displayStart, displayEnd, today, factor, outcome) {
         index.compare(displayStart, displayEnd, today, factor, outcome)
     }
-    val metrics = listOf("Energy") + diary.prefs.pins.sorted()
+    val metrics = listOf("Energy") + symptoms
     val tags = remember(index, displayStart, displayEnd) {
         diary.activities.filter { it.date >= displayStart.toString() && it.date <= displayEnd.toString() }
             .flatMap { it.tags }.sorted().distinctBy(::activityTagKey)
@@ -138,38 +140,54 @@ fun PatternsScreen(diary: Diary, onDate: (String) -> Unit, onToday: () -> Unit) 
                 }
             }
         }
-        val showDaily = !longRange || month != null
+        val showDaily = !longRange || period == 90 || month != null
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Box(Modifier.weight(1f)) {
                 PatternMenu(symptom ?: "Energy", metrics, { metric = if (it == 0) null else metrics[it] }, true)
             }
             if (showDaily && !largeType) TextButton(onClick = { details = "timeline" }) { Text("Timeline as text") }
         }
-        if (longRange && month == null) {
-            val months = remember(index, start, end, symptom) { index.monthly(start, end, symptom, levels.size) }
-            if (months.values.none { slots -> slots.values.any { counts -> counts.recorded > 0 } }) {
-                Text("No ${symptom?.lowercase() ?: "energy"} entries in this period.")
-                TextButton(onClick = onToday) { Text("Go to Today") }
-            }
-            Text("Monthly distributions", style = MaterialTheme.typography.titleMedium)
-            months.entries.toList().asReversed().forEach { (key, slots) ->
-                Column(Modifier.fillMaxWidth().clickable(role = Role.Button) { selectedMonth = key.toString() }
-                    .padding(vertical = 8.dp)) {
-                    Text(key.format(monthLabel), style = MaterialTheme.typography.titleMedium)
-                    slots.forEach { (slot, ratings) ->
-                        Text("${if (slot == "am") "● Morning" else "◆ Evening"} · ${ratings.recorded} recorded",
-                            color = if (slot == "am") MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.tertiary)
-                        if (ratings.unrated > 0) Text("Severity not rated · ${ratings.unrated}", style = MaterialTheme.typography.bodySmall)
-                        Text(levels.mapIndexed { i, label -> "$label ${ratings.counts[i]}" }.joinToString(" · "),
-                            style = MaterialTheme.typography.bodySmall)
-                    }
-                }
-                HorizontalDivider()
-            }
-        } else {
+        if (showDaily) {
             if (month != null) TextButton(onClick = { selectedMonth = null }) { Text("‹ Months   ·   ${month.format(monthLabel)}") }
             Timeline(index, displayStart, displayEnd, symptom, levels, factor, onToday)
             if (largeType) TextButton(onClick = { details = "timeline" }) { Text("Timeline as text") }
+        }
+        if (longRange && month == null) {
+            val months = remember(index, start, end, symptom) { index.monthly(start, end, symptom, levels.size) }
+            if (period == 90) {
+                val options = months.keys.reversed()
+                PatternMenu("Explore a month", options.map { it.format(monthLabel) }, { selectedMonth = options[it].toString() })
+            } else {
+                Text("Monthly distributions", style = MaterialTheme.typography.titleMedium)
+                if (months.values.none { slots -> slots.values.any { it.recorded > 0 } }) {
+                    Text("No ${symptom?.lowercase() ?: "energy"} entries in this period.")
+                    TextButton(onClick = onToday) { Text("Go to Today") }
+                }
+                Text("Levels from ${levels.first().lowercase()} to ${levels.last().lowercase()}", style = MaterialTheme.typography.bodySmall)
+                months.entries.toList().asReversed().forEach { (key, slots) ->
+                    Column(Modifier.fillMaxWidth().clickable(role = Role.Button) { selectedMonth = key.toString() }
+                        .padding(vertical = 8.dp)) {
+                        Text("${key.format(monthLabel)}   ›", style = MaterialTheme.typography.titleMedium)
+                        val peak = slots.values.maxOf { it.counts.maxOrNull() ?: 0 }.coerceAtLeast(1)
+                        slots.forEach { (slot, ratings) ->
+                            val am = slot == "am"
+                            val color = if (am) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.tertiary
+                            Text("${if (am) "● Morning" else "◆ Evening"} · ${ratings.recorded} recorded", color = color)
+                            val summary = levels.mapIndexed { i, label -> "$label ${ratings.counts[i]}" }.joinToString(" · ")
+                            Canvas(Modifier.fillMaxWidth().height(28.dp).semantics { contentDescription = summary }) {
+                                val step = size.width / levels.size
+                                ratings.counts.forEachIndexed { i, count ->
+                                    val height = size.height * count / peak
+                                    drawRect(color, Offset(step * (i + .1f), size.height - height), Size(step * .8f, height))
+                                }
+                            }
+                            Text(summary, style = MaterialTheme.typography.bodySmall)
+                            if (ratings.unrated > 0) Text("Severity not rated · ${ratings.unrated}", style = MaterialTheme.typography.bodySmall)
+                        }
+                    }
+                    HorizontalDivider()
+                }
+            }
         }
         HorizontalDivider()
         val factors = listOf("After work days", "After socialising", "After household tasks")
@@ -191,7 +209,7 @@ fun PatternsScreen(diary: Diary, onDate: (String) -> Unit, onToday: () -> Unit) 
         Text(if (outcome.lag == 0L) "These answers describe the same day. Their order is unknown."
             else "Starting energy, overlapping activities and gaps can affect these observations.",
             style = MaterialTheme.typography.bodySmall)
-        FrequencyCharts(index, displayStart, displayEnd, tags, recordedSymptoms, onDate)
+        FrequencyCharts(index, displayStart, displayEnd, tags, symptoms, onDate)
         if (lookupOptions.isNotEmpty()) {
             HorizontalDivider()
             PatternMenu(lookup?.takeIf { it in lookupOptions } ?: "Look up an activity or symptom", lookupOptions, { lookup = lookupOptions[it]; details = "lookup" })
@@ -258,10 +276,9 @@ fun PatternsScreen(diary: Diary, onDate: (String) -> Unit, onToday: () -> Unit) 
 
 @Composable
 private fun FrequencyCharts(index: PatternIndex, start: LocalDate, end: LocalDate, tags: List<String>,
-                            recordedSymptoms: List<String>, onDate: (String) -> Unit) {
+                            symptoms: List<String>, onDate: (String) -> Unit) {
     val factors = Factor.values().map { it.label }
     val activities = (factors + tags).distinct()
-    val symptoms = (index.diary.prefs.pins.sorted() + recordedSymptoms + symptomLabels).distinct()
     var pickedActivity by rememberSaveable { mutableStateOf("Work") }
     var pickedSymptom by rememberSaveable { mutableStateOf(symptoms.first()) }
     val activity = pickedActivity.takeIf { it in activities } ?: activities.first()
@@ -273,20 +290,25 @@ private fun FrequencyCharts(index: PatternIndex, start: LocalDate, end: LocalDat
     var detail by rememberSaveable { mutableStateOf<String?>(null) }
     val primary = MaterialTheme.colorScheme.primary
     val secondary = MaterialTheme.colorScheme.tertiary
-    val neutral = MaterialTheme.colorScheme.onSurfaceVariant
     Spacer(Modifier.height(12.dp))
     Text("Activity frequency", style = MaterialTheme.typography.headlineSmall, fontFamily = FontFamily.Serif)
-    PatternMenu(activity, activities, { pickedActivity = activities[it] })
+    Text("Days with each activity", style = MaterialTheme.typography.bodyMedium)
+    val counts = remember(index, start, end, activities) { index.activityCounts(start, end, activities) }
     val answers = if (activity in factors) listOf(true to "Yes", false to "No", null to "Unanswered")
         else listOf(true to "Marked", null to "Unmarked")
-    for ((answer, label) in answers) {
-        FrequencyBar(label, activityDates[answer].orEmpty().size, days, when (answer) {
-            true -> primary
-            false -> secondary
-            null -> neutral
-        })
+    activities.forEach { name ->
+        val selected = name == activity
+        val shape = RoundedCornerShape(10.dp)
+        val highlight = if (selected) Modifier.background(MaterialTheme.colorScheme.primaryContainer, shape)
+            .border(1.dp, primary, shape) else Modifier
+        Column(Modifier.fillMaxWidth().then(highlight)
+            .selectable(selected, role = Role.RadioButton) { pickedActivity = name }
+            .heightIn(min = 48.dp).padding(horizontal = 10.dp, vertical = 4.dp),
+            verticalArrangement = Arrangement.Center) {
+            FrequencyBar(name, counts.getValue(name), days, primary)
+        }
+        if (selected) ActivityWeekdays(activity, activityDates, answers) { detail = "activity" }
     }
-    TextButton(onClick = { detail = "activity" }) { Text("Activity dates   ›") }
     Spacer(Modifier.height(12.dp))
     Text("Symptom ratings", style = MaterialTheme.typography.headlineSmall, fontFamily = FontFamily.Serif)
     PatternMenu(symptom, symptoms, { pickedSymptom = symptoms[it] })
@@ -323,6 +345,38 @@ private fun FrequencyCharts(index: PatternIndex, start: LocalDate, end: LocalDat
             }
         }
     }
+}
+
+@Composable
+private fun ActivityWeekdays(activity: String, activityDates: Map<Boolean?, List<LocalDate>>,
+                             answers: List<Pair<Boolean?, String>>, onDates: () -> Unit) {
+    val primary = MaterialTheme.colorScheme.primary
+    val secondary = MaterialTheme.colorScheme.tertiary
+    val neutral = MaterialTheme.colorScheme.outlineVariant
+    Text("$activity by weekday", style = MaterialTheme.typography.titleMedium)
+    val weekdays = remember(activityDates) {
+        (1..7).map { day -> answers.map { (answer, _) -> activityDates[answer].orEmpty().count { it.dayOfWeek.value == day } } }
+    }
+    Text(answers.joinToString(" / ") { it.second }, style = MaterialTheme.typography.bodySmall)
+    weekdays.forEachIndexed { day, values ->
+        val total = values.sum()
+        if (total > 0) {
+            val label = java.time.DayOfWeek.of(day + 1).getDisplayName(java.time.format.TextStyle.SHORT, java.util.Locale.getDefault())
+            val summary = "$label, " + answers.mapIndexed { i, (_, status) -> "${values[i]} $status" }.joinToString(", ")
+            Row(Modifier.fillMaxWidth().clearAndSetSemantics { contentDescription = summary },
+                verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(label, Modifier.width((38 * LocalDensity.current.fontScale).dp), style = MaterialTheme.typography.bodySmall)
+                Row(Modifier.weight(1f).height(8.dp)) {
+                    values.forEachIndexed { i, count ->
+                        if (count > 0) Spacer(Modifier.weight(count.toFloat()).fillMaxHeight()
+                            .background(when (answers[i].first) { true -> primary; false -> secondary; null -> neutral }))
+                    }
+                }
+                Text(values.joinToString(" / "), style = MaterialTheme.typography.bodySmall)
+            }
+        }
+    }
+    TextButton(onClick = onDates) { Text("Activity dates   ›") }
 }
 
 @Composable
@@ -418,7 +472,7 @@ private fun Timeline(index: PatternIndex, start: LocalDate, end: LocalDate, symp
                     val point = value?.takeIf { it in levels.indices }?.let { Offset(x(i, slot == "pm"), y(it)) }
                     if (point != null) {
                         previous?.let { drawLine(color, it, point, 1.4.dp.toPx()) }
-                        val radius = 2.8.dp.toPx()
+                        val radius = if (dates.size > 31) 1.7.dp.toPx() else 2.8.dp.toPx()
                         if (slot == "am") drawCircle(color, radius, point)
                         else drawPath(Path().apply {
                             moveTo(point.x, point.y - radius); lineTo(point.x + radius, point.y)

@@ -47,8 +47,12 @@ class PatternsFlowTest {
                 } }
             }
             tap("7 days")
-            compose.onNodeWithText("Yes · 1 of 7 days").performScrollTo().assertIsDisplayed()
-            compose.onNodeWithText("Unanswered · 6 of 7 days").assertExists()
+            compose.onNodeWithText("Work · 1 of 7 days").performScrollTo().assertIsDisplayed()
+            compose.onNodeWithText("Socialising · 1 of 7 days").assertExists()
+            tap("Call · 1 of 7 days")
+            compose.onNodeWithText("Call · 1 of 7 days").assertIsSelected()
+            compose.onNodeWithText("Call by weekday").assertExists()
+            compose.onNodeWithText("Marked / Unmarked").assertExists()
             tap("Activity dates   ›")
             inDialog(anchor.format(longDate)).performClick()
             compose.runOnIdle { assertEquals(anchor.toString(), opened) }
@@ -59,6 +63,31 @@ class PatternsFlowTest {
             inDialog("Morning · None · 1").assertExists()
             compose.onNode(dialog and hasText(gap.format(longDate)) and hasText("Morning · None")).performClick()
             compose.runOnIdle { assertEquals(gap.toString(), opened) }
+        }
+    }
+
+    @Test fun selectsHistoricalSymptomAndOpensAllTimeMonthlyPlot() {
+        val historical = "Historical symptom"
+        val older = today.minusMonths(4)
+        val data = fixture.copy(checks = listOf(Check(older.toString(), "pm", symptoms = mapOf(historical to 3))))
+        ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+            scenario.onActivity { activity ->
+                activity.setContent { DiaryTheme(false) {
+                    Surface { PatternsScreen(data, onDate = {}, onToday = {}) }
+                } }
+            }
+            tap("Energy")
+            compose.onNode(dialog and hasScrollAction()).performScrollToNode(hasText(historical))
+            inDialog(historical).performClick()
+            compose.onNodeWithText("No historical symptom entries in this period.").assertExists()
+            tap("All time")
+            val month = YearMonth.from(older).format(monthLabel)
+            compose.onNodeWithContentDescription("None 0 · Mild 0 · Moderate 0 · Strong 1", useUnmergedTree = true).assertExists()
+            tap("$month   ›")
+            tap("Timeline as text")
+            compose.onNode(dialog and hasScrollAction()).performScrollToNode(hasText(older.format(longDate)))
+            compose.onNode(dialog and hasText(older.format(longDate)) and hasText("Evening · Strong", substring = true))
+                .assertExists()
         }
     }
 
@@ -81,7 +110,7 @@ class PatternsFlowTest {
             compose.runOnIdle { assertEquals(anchor.toString(), opened) }
             inDialog("Close").performClick()
             tap("Look up an activity or symptom")
-            compose.onNodeWithText("Call").performClick()
+            inDialog("Call").performClick()
             inDialog("Next morning · No entry\nTwo mornings later · Low\nWorthwhile · Yes", true).assertExists()
             inDialog("Close").performClick()
             tap("Timeline as text")
@@ -90,7 +119,9 @@ class PatternsFlowTest {
             inDialog("Close").performClick()
             tap("90 days")
             val month = YearMonth.from(today).format(monthLabel)
-            compose.onNodeWithText(month).performScrollTo().performClick()
+            compose.onNodeWithContentDescription("Energy timeline", substring = true).assertExists()
+            tap("Explore a month")
+            inDialog(month).performClick()
             compose.onNodeWithText("‹ Months   ·   $month").assertExists()
             tap("Timeline as text")
             inDialog(today.format(longDate)).assertExists()

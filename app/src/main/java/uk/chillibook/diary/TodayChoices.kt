@@ -2,6 +2,7 @@ package uk.chillibook.diary
 
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.ui.graphics.Color
@@ -21,7 +22,6 @@ import androidx.compose.ui.*
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.*
 import androidx.compose.ui.graphics.compositeOver
-import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.*
@@ -72,11 +72,12 @@ private fun selectionScale(selected: Boolean, pressed: Boolean): Float {
     LaunchedEffect(selected) {
         if (previous != selected) {
             previous = selected
-            pulse.snapTo(.95f)
-            pulse.animateTo(1f, tween(180))
+            pulse.snapTo(.90f)
+            pulse.animateTo(1.025f, tween(125))
+            pulse.animateTo(1f, tween(135))
         }
     }
-    return minOf(press, pulse.value)
+    return press * pulse.value
 }
 
 @Composable
@@ -90,7 +91,8 @@ internal fun AnswerTile(question: String, label: String, active: Boolean, modifi
     val pressed by interactions.collectIsPressedAsState()
     val shrink = selectionScale(active, pressed)
     val fill = if (active) tone else tone.copy(alpha = if (accent != null) .13f else .06f).compositeOver(colors.surface)
-    val background = if (pressed) ink.copy(alpha = .10f).compositeOver(fill) else fill
+    val background by animateColorAsState(if (pressed) ink.copy(alpha = .18f).compositeOver(fill) else fill,
+        tween(120), label = "answer fill")
     Box(modifier.clip(shape)
         .selectable(active, interactionSource = interactions, indication = LocalIndication.current,
             role = Role.RadioButton, onClick = onClick)
@@ -99,10 +101,7 @@ internal fun AnswerTile(question: String, label: String, active: Boolean, modifi
         .border(1.dp, if (active) tone else tone.copy(alpha = .22f), shape)
         .heightIn(min = if (rank == null) 48.dp else 68.dp),
         contentAlignment = Alignment.Center) {
-        // Reserve the tick space in both states so selecting a tile never moves its label.
-        val contentPadding = if (compact || rank != null) PaddingValues(start = 2.dp, end = 2.dp, top = 19.dp, bottom = 6.dp)
-            else PaddingValues(start = 24.dp, end = 8.dp, top = 8.dp, bottom = 8.dp)
-        Column(Modifier.padding(contentPadding),
+        Column(Modifier.padding(horizontal = if (compact) 3.dp else 12.dp, vertical = 9.dp),
             horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
             if (rank != null) {
                 Canvas(Modifier.size(28.dp, 12.dp)) {
@@ -115,15 +114,10 @@ internal fun AnswerTile(question: String, label: String, active: Boolean, modifi
                 Spacer(Modifier.height(4.dp))
             }
             Text(label, textAlign = TextAlign.Center, color = ink,
+                fontWeight = if (active) FontWeight.SemiBold else FontWeight.Normal,
                 style = MaterialTheme.typography.bodyMedium.copy(fontSize = if (compact) 14.sp else 15.sp, lineHeight = 17.sp))
         }
-        val tickPosition = if (compact || rank != null) Modifier.align(Alignment.TopEnd).padding(top = 7.dp, end = 8.dp)
-            else Modifier.align(Alignment.CenterStart).padding(start = 8.dp)
-        if (active) Canvas(tickPosition.size(11.dp, 8.dp)) {
-            val mid = Offset(size.width * .32f, size.height * .86f)
-            drawLine(ink, Offset(0f, size.height * .45f), mid, 1.5.dp.toPx(), cap = StrokeCap.Round)
-            drawLine(ink, mid, Offset(size.width, 0f), 1.5.dp.toPx(), cap = StrokeCap.Round)
-        }
+
     }
 }
 
@@ -176,15 +170,18 @@ internal fun DiaryChip(label: String, selected: Boolean, onClick: () -> Unit, mo
     val scale = selectionScale(selected, pressed)
     val shape = RoundedCornerShape(15.dp)
     val colors = MaterialTheme.colorScheme
-    val alpha = when { pressed -> .30f; selected -> .20f; else -> .06f }
+    val alpha = when { pressed -> .40f; selected -> .24f; else -> .06f }
+    val fill by animateColorAsState(accent.copy(alpha = alpha).compositeOver(colors.surface),
+        tween(145), label = "chip fill")
+    val symbolAngle by animateFloatAsState(if (remove) 180f else 0f, tween(210), label = "chip turn")
     Row(modifier.heightIn(min = 48.dp).clip(shape)
         .toggleable(value = selected, interactionSource = interactions, indication = LocalIndication.current,
             role = Role.Checkbox, onValueChange = { onClick() })
-        .graphicsLayer { scaleX = scale; scaleY = scale }.background(accent.copy(alpha = alpha).compositeOver(colors.surface), shape)
+        .graphicsLayer { scaleX = scale; scaleY = scale }.background(fill, shape)
         .border(1.dp, accent.copy(alpha = if (selected) .75f else .15f), shape).padding(horizontal = 13.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
         if (symbol != null) {
-            Box(Modifier.width(18.dp), contentAlignment = Alignment.Center) {
+            Box(Modifier.width(18.dp).graphicsLayer { rotationZ = symbolAngle }, contentAlignment = Alignment.Center) {
                 Text(symbol, color = if (remove) colors.error else accent, fontWeight = FontWeight.Bold)
             }
         }

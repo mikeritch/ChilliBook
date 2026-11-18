@@ -32,9 +32,13 @@ class StorageBackupTest {
         val check = morning.copy(symptoms = mapOf("Brain fog" to UNRATED_SYMPTOM, "Headache" to 0))
         val original = sample.copy(checks = listOf(check))
         val backup = JSONObject(Backup.encode(original))
-        assertEquals(3, backup.getInt("version"))
+        assertEquals(4, backup.getInt("version"))
+        assertFalse(backup.getJSONObject("prefs").has("pins"))
         assertFalse(backup.has("episodes"))
         assertFalse(backup.getJSONArray("days").getJSONObject(0).has("workOff"))
+        assertEquals(original, Backup.decode(backup.toString()))
+        backup.put("version", 3)
+        backup.getJSONObject("prefs").put("pins", org.json.JSONArray().put("Heavy fatigue"))
         assertEquals(original, Backup.decode(backup.toString()))
         for (version in 1..2) {
             backup.put("version", version)
@@ -58,6 +62,7 @@ class StorageBackupTest {
         assertEquals(configured, Backup.decode(current))
         val old = JSONObject(current).apply {
             put("version", 2)
+            getJSONObject("prefs").put("pins", org.json.JSONArray().put("Headache"))
             put("episodes", org.json.JSONArray().put(JSONObject().apply {
                 put("id", "spell")
                 put("start", "2026-11-10")
@@ -111,7 +116,7 @@ class StorageBackupTest {
             }
             val missingField = JSONObject(valid).apply { getJSONArray("days").getJSONObject(0).remove("work") }
             val wrongType = JSONObject(valid).apply { getJSONArray("checks").getJSONObject(0).put("energy", "2") }
-            val unsupported = JSONObject(valid).put("version", 4)
+            val unsupported = JSONObject(valid).put("version", 5)
             val badDate = JSONObject(valid).apply { getJSONArray("days").getJSONObject(0).put("date", "2026-02-30") }
             for (damaged in listOf(valid.dropLast(1), valid + "extra", duplicate.toString(), unsupported.toString(),
                 missingField.toString(), wrongType.toString(), badDate.toString())) {

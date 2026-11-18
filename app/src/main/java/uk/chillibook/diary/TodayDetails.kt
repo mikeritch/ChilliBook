@@ -14,10 +14,7 @@ internal fun TodayDetails(diary: Diary, date: String, slot: String, edit: DiaryE
     val day = diary.days.find { it.date == date }
     val check = diary.checks.find { it.date == date && it.slot == slot }
     val symptoms = check?.symptoms.orEmpty()
-    val pins = diary.prefs.pins
-    val names = (pins.sorted() + symptomLabels + symptoms.keys.sorted()).distinct()
-    var editingPins by rememberSaveable { mutableStateOf(false) }
-    var correcting by rememberSaveable { mutableStateOf(false) }
+    val names = (symptomLabels + symptoms.keys.sorted()).distinct()
 
     var removedName by rememberSaveable { mutableStateOf<String?>(null) }
     var removedRating by rememberSaveable { mutableIntStateOf(UNRATED_SYMPTOM) }
@@ -56,53 +53,12 @@ internal fun TodayDetails(diary: Diary, date: String, slot: String, edit: DiaryE
             edit { d -> d.changeCheck(date, slot) { val value = if (it.symptoms[name] == rating) UNRATED_SYMPTOM else rating
                 it.copy(symptoms = it.symptoms + (name to value)) } }
         }
-
     }
 
-    DetailLink("Change pinned symptoms", if (editingPins) "⌃" else "⌄") { editingPins = !editingPins }
-    if (editingPins) {
-        Text("Pinned symptoms appear first in your check-ins.")
-        for (name in (symptomLabels + symptoms.keys.sorted() + pins.sorted()).distinct()) {
-            AnswerTile("Pin symptom", name, name in pins, Modifier.fillMaxWidth().padding(top = 6.dp)) {
-                edit { d -> d.copy(prefs = d.prefs.copy(pins = d.prefs.pins.toggle(name))) }
-            }
-        }
-    }
     if (slot == "pm") {
-        OptionalField("Did symptoms change your plans?", listOf("As planned", "Slowed down", "Dropped something", "Needed help"), day?.impact) { value ->
-            edit { d -> d.changeDay(date) { it.copy(impact = value) } }
-        }
         MultiField("Context", listOf("Fighting a bug", "Unusual stress", "Change in medication"), day?.context.orEmpty()) { value ->
             edit { d -> d.changeDay(date) { it.copy(context = it.context.toggle(value)) } }
         }
-    }
-    DetailLink("Edit check-in answers", if (correcting) "⌃" else "⌄") { correcting = !correcting }
-    if (correcting) {
-        fun clearCheck(update: (Check) -> Check) = edit { it.changeCheck(date, slot, update) }
-        ClearAnswer("Energy", check?.energy?.let(energyLabels::get)) { clearCheck { it.copy(energy = null) } }
-        if (slot == "am") {
-            ClearAnswer("Waking refreshment", check?.sleep?.let(sleepLabels::get)) { clearCheck { it.copy(sleep = null) } }
-        } else {
-            ClearAnswer("Overall wellbeing", day?.wellbeing?.let(wellbeingLabels::get)) { edit { d -> d.changeDay(date) { it.copy(wellbeing = null) } } }
-        }
-    }
-}
-
-@Composable
-private fun ClearAnswer(name: String, value: String?, clear: () -> Unit) {
-    Row(Modifier.fillMaxWidth(), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
-        Text("$name · ${value ?: "Unanswered"}", Modifier.weight(1f))
-        TextButton(onClick = clear, enabled = value != null) { Text("Clear") }
-    }
-}
-
-@Composable
-internal fun OptionalField(label: String, choices: List<String>, value: String?, change: (String?) -> Unit) {
-    var expanded by rememberSaveable { mutableStateOf(false) }
-    DetailLink(listOfNotNull(label, value).joinToString(" · "), if (expanded) "⌃" else "⌄") { expanded = !expanded }
-    if (expanded) {
-        AnswerGrid(label, choices, choices.indexOf(value)) { change(choices[it]) }
-        if (value != null) TextButton(onClick = { change(null) }) { Text("Clear $label") }
     }
 }
 

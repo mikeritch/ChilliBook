@@ -188,6 +188,9 @@ class TodayFlowTest {
                         day?.work == false && day.social == true && day.wellbeing == 3 &&
                             data.checks.any { it.date == today.toString() && it.slot == "pm" && it.energy == 0 }
                     }
+                    select("How did today feel overall?", "Fairly well")
+                    awaitStored(store) { data -> data.days.any { it.date == today.toString() &&
+                        it.wellbeing == null && it.work == false && it.social == true } }
                     chooseYesterday()
                     slot(morning = true)
                     select(energyQuestion, "Medium")
@@ -200,6 +203,14 @@ class TodayFlowTest {
                         val check = data.checks.singleOrNull { it.date == yesterday.toString() && it.slot == "am" }
                         check?.energy == 4 && check.symptoms["Brain fog"] == 1 && check.sleep == null
                     }
+                    select(energyQuestion, "High")
+                    awaitStored(store) { data -> data.checks.any { it.date == yesterday.toString() &&
+                        it.slot == "am" && it.energy == null && it.symptoms["Brain fog"] == 1 } }
+                    select("How refreshed did you feel on waking?", "Fully")
+                    awaitStored(store) { data -> data.checks.any { it.date == yesterday.toString() && it.sleep == 3 } }
+                    select("How refreshed did you feel on waking?", "Fully")
+                    awaitStored(store) { data -> data.checks.any { it.date == yesterday.toString() &&
+                        it.sleep == null && it.symptoms["Brain fog"] == 1 } }
                     val data = runBlocking { store.read() }
                     assertEquals(2, data.checks.count { it.date == today.toString() })
                     assertEquals(2, data.checks.single { it.date == today.toString() && it.slot == "am" }.sleep)

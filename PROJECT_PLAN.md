@@ -2,7 +2,7 @@
 
 A private diary for one person balancing mild-to-moderate ME/CFS with work, socialising and household life. In the morning it should take two taps to say how the night went and how much energy is available. In the evening it should be just as easy to record a good visit with a friend as a difficult day at work. Months later, the person should be able to see what they enjoyed, what they could manage and how they felt afterwards.
 
-The original design reference and milestone descriptions document the first release. The current 1.4 changes are specified below.
+The original design reference and milestone descriptions document the first release. The current 1.5 changes are specified below.
 
 The **first release** is a privately installed Android app with offline check-ins, editable history, personal charts and a restorable backup. The two check-ins and emphasis on ordinary working life are the owner's choices. The labels, timings and visual palette below are starting points to try on their phone.
 
@@ -170,3 +170,11 @@ Use space between sections, softly filled controls, and illustrated question hea
 Morning and evening each have their own inline symptom toggles. Selecting a symptom records its presence immediately. Tapping a severity records the rating; tapping the same severity again clears just the rating. Remove the symptom with its minus. Undo restores its previous rating. History and Patterns distinguish unrecorded, recorded without severity, and explicit None.
 
 The 1.4 migration retires crash episodes and the reason for a No work answer. Keep the work flag, check-ins, activities, personal settings and other day fields. Room schema 3 drops only the retired fields. Format 3 backups omit them, and the reader imports the remaining fields from formats 1 and 2.
+
+## Check-ins, History and Patterns · 1.5
+
+Select and clear energy, waking refreshment and wellbeing in place. Use centred labels, graded fills and a short, silent response to a tap. The night palette uses deep indigo surfaces with bright mint and lilac accents. Use a larger lightning bolt for energy.
+
+Retire symptom pins, the separate answer editor and the evening question about changes to plans. Keep existing answers to that question in History and exports. Room schema 4 removes the pin preference. Backup format 4 retains import support for formats 1–3.
+
+History shows the two previous dates, the next morning and the morning after, each with its own dated section. Keep gaps and future dates explicit. Patterns plots morning and evening across the full 90 days. All time shows monthly distributions for longer spans. Offer all known symptoms as timeline metrics. Show recorded days for each activity together. Selecting one opens its weekday breakdown and the dates behind it.

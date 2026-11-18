@@ -32,8 +32,9 @@ interface DiaryDao {
     @Delete suspend fun deleteActivity(value: ActivityEntry)
 }
 
-@Database(entities = [Day::class, Check::class, ActivityEntry::class, Prefs::class], version = 3, exportSchema = true,
-    autoMigrations = [AutoMigration(from = 1, to = 2), AutoMigration(from = 2, to = 3, spec = RemoveRetiredFields::class)])
+@Database(entities = [Day::class, Check::class, ActivityEntry::class, Prefs::class], version = 4, exportSchema = true,
+    autoMigrations = [AutoMigration(from = 1, to = 2), AutoMigration(from = 2, to = 3, spec = RemoveRetiredFields::class),
+        AutoMigration(from = 3, to = 4, spec = RemoveSymptomPins::class)])
 @TypeConverters(ValueConverters::class)
 abstract class DiaryDatabase : RoomDatabase() {
     abstract fun diary(): DiaryDao
@@ -42,6 +43,9 @@ abstract class DiaryDatabase : RoomDatabase() {
 @DeleteTable(tableName = "episodes")
 @DeleteColumn(tableName = "days", columnName = "workOff")
 class RemoveRetiredFields : AutoMigrationSpec
+
+@DeleteColumn(tableName = "prefs", columnName = "pins")
+class RemoveSymptomPins : AutoMigrationSpec
 
 class Storage(context: Context, databaseName: String = "diary.db") : AutoCloseable {
     private val db = Room.databaseBuilder(context.applicationContext, DiaryDatabase::class.java, databaseName).build()

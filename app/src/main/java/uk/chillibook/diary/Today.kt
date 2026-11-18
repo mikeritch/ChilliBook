@@ -41,7 +41,7 @@ fun TodayScreen(diary: Diary, date: String, slot: String, onDate: (String) -> Un
             QuestionText(energyQuestion)
             Spacer(Modifier.height(10.dp))
             AnswerGrid(energyQuestion, energyLabels, check?.energy, 5, bars = true) { level ->
-                edit { d -> d.changeCheck(date, slot) { it.copy(energy = level) } }
+                edit { d -> d.changeCheck(date, slot) { answer -> answer.copy(energy = level.takeUnless { it == answer.energy }) } }
             }
             Spacer(Modifier.height(18.dp))
             if (morning) {
@@ -49,14 +49,14 @@ fun TodayScreen(diary: Diary, date: String, slot: String, onDate: (String) -> Un
                 QuestionText(question)
                 Spacer(Modifier.height(10.dp))
                 AnswerGrid(question, sleepLabels, check?.sleep) { level ->
-                    edit { d -> d.changeCheck(date, slot) { it.copy(sleep = level) } }
+                    edit { d -> d.changeCheck(date, slot) { answer -> answer.copy(sleep = level.takeUnless { it == answer.sleep }) } }
                 }
             } else {
                 val question = "How did today feel overall?"
                 QuestionText(question)
                 Spacer(Modifier.height(10.dp))
                 AnswerGrid(question, wellbeingLabels, day?.wellbeing, 5) { level ->
-                    edit { d -> d.changeDay(date) { it.copy(wellbeing = level) } }
+                    edit { d -> d.changeDay(date) { answer -> answer.copy(wellbeing = level.takeUnless { it == answer.wellbeing }) } }
                 }
                 Spacer(Modifier.height(28.dp))
                 key(date) { EveningActivities(diary, date, edit) }

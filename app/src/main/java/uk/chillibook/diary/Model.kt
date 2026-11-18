@@ -27,7 +27,6 @@ data class ActivityEntry(@PrimaryKey val id: String = UUID.randomUUID().toString
 
 @Entity(tableName = "prefs")
 data class Prefs(@PrimaryKey val id: Int = 1, val theme: String = "system",
-    val pins: Set<String> = setOf("Brain fog","Heavy fatigue"),
     val morningReminder: Int? = null, val eveningReminder: Int? = null)
 
 data class Diary(val days: List<Day> = emptyList(), val checks: List<Check> = emptyList(),

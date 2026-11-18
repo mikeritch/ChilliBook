@@ -25,11 +25,16 @@ private val paper = lightColorScheme(
     outline = Color(0xFF837B74), outlineVariant = Color(0xFFE3DBD1), tertiary = Color(0xFF795576),
     secondaryContainer = Color(0xFFDCEBE4), onSecondaryContainer = Color(0xFF205B50))
 private val night = darkColorScheme(
-    background = Color(0xFF241F29), surface = Color(0xFF2E2933), onSurface = Color(0xFFF5EDF3),
-    onBackground = Color(0xFFF5EDF3), primary = Color(0xFFA8D8C7), onPrimary = Color(0xFF193B34),
-    onSurfaceVariant = Color(0xFFCEC1CD), surfaceVariant = Color(0xFF39313D),
-    outline = Color(0xFFA498A6), outlineVariant = Color(0xFF493E4D), tertiary = Color(0xFFDAB3DA),
-    secondaryContainer = Color(0xFF354B45), onSecondaryContainer = Color(0xFFA8D8C7))
+    background = Color(0xFF141526), surface = Color(0xFF20213A), onSurface = Color(0xFFFBF4FF),
+    onBackground = Color(0xFFFBF4FF), primary = Color(0xFF65E5CD), onPrimary = Color(0xFF003D35),
+    primaryContainer = Color(0xFF155349), onPrimaryContainer = Color(0xFFB4FFEC),
+    secondary = Color(0xFFACBCFF), onSecondary = Color(0xFF172451),
+    secondaryContainer = Color(0xFF303C65), onSecondaryContainer = Color(0xFFDCE4FF),
+    tertiary = Color(0xFFEBA6FF), onTertiary = Color(0xFF481356),
+    onSurfaceVariant = Color(0xFFD2CCE5), surfaceVariant = Color(0xFF32314D),
+    surfaceContainerLow = Color(0xFF1C1C32), surfaceContainer = Color(0xFF27263E),
+    surfaceContainerHigh = Color(0xFF31304B), surfaceContainerHighest = Color(0xFF3A3855),
+    outline = Color(0xFFAAA2BF), outlineVariant = Color(0xFF4A4562), error = Color(0xFFFF95A0))
 
 @Composable
 fun DiaryTheme(dark: Boolean, content: @Composable () -> Unit) {
@@ -57,8 +62,8 @@ fun TitleArt(title: String, art: String) {
 internal fun categoryAccent(category: String): Color {
     val dark = MaterialTheme.colorScheme.background.luminance() < .5f
     return when (category) {
-        "Work" -> if (dark) Color(0xFFB7C7FA) else Color(0xFF475A8F)
-        "Household" -> if (dark) Color(0xFFF4BE92) else Color(0xFF895029)
+        "Work" -> if (dark) Color(0xFF9DB5FF) else Color(0xFF475A8F)
+        "Household" -> if (dark) Color(0xFFFFB47E) else Color(0xFF895029)
         "Socialising", "Symptoms" -> MaterialTheme.colorScheme.tertiary
         else -> MaterialTheme.colorScheme.primary
     }
@@ -66,7 +71,7 @@ internal fun categoryAccent(category: String): Color {
 
 // Order runs from difficult to comfortable. Each endpoint has a separate dark-theme ink.
 private val paperScale = listOf(0xFF92465A, 0xFF945339, 0xFF786021, 0xFF4C7040, 0xFF246759).map { Color(it) }
-private val nightScale = listOf(0xFFF0AEC1, 0xFFF3B69B, 0xFFE6CA85, 0xFFB7D6A4, 0xFF9DDAC3).map { Color(it) }
+private val nightScale = listOf(0xFFFF94AE, 0xFFFFAE86, 0xFFF7D477, 0xFFB1E68D, 0xFF64E1C4).map { Color(it) }
 
 @Composable
 internal fun scaleAccent(labels: List<String>, index: Int): Color? {
@@ -80,6 +85,6 @@ internal fun scaleAccent(labels: List<String>, index: Int): Color? {
 internal fun DiaryIcon(icon: Int, accent: Color, modifier: Modifier = Modifier) {
     Box(modifier.size(36.dp).background(accent.copy(alpha = .12f), CircleShape),
         contentAlignment = Alignment.Center) {
-        Icon(painterResource(icon), null, Modifier.size(23.dp), tint = accent)
+        Icon(painterResource(icon), null, Modifier.size(if (icon == R.drawable.diary_spark) 29.dp else 23.dp), tint = accent)
     }
 }

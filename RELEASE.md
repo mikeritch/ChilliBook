@@ -7,7 +7,7 @@
 **Over USB.** Enable USB debugging and authorise the computer on the phone. Place the signed APK beside [Install ChilliBook.command](<release/Install ChilliBook.command>) and double-click the command on macOS. With Android SDK Platform-Tools on your path, you can also run the following from the project root.
 
 ```sh
-adb -d install -r release/ChilliBook-1.4.apk
+adb -d install -r release/ChilliBook-1.5.apk
 ```
 
 ## Back up or move the diary
@@ -26,12 +26,20 @@ Choose **Settings → Back up diary** and select a private destination. The JSON
 apk=app/build/outputs/apk/release/app-release.apk
 apksigner verify --print-certs "$apk"
 aapt dump badging "$apk" | head -1
-version=1.4  # set to the version you just built
+version=1.5  # set to the version you just built
 cp "$apk" "release/ChilliBook-$version.apk"
 git tag "v$version"
 git push origin HEAD "v$version"
 gh release create "v$version" "release/ChilliBook-$version.apk" --verify-tag --generate-notes --latest
 ```
+
+## Release 1.5
+
+The check-in uses centred, tick-free controls. Tapping a selected energy, sleep or wellbeing answer again clears it. History includes dated sections for the two previous days and the next two mornings. Patterns adds a 90-day timeline, monthly all-time charts and one-tap activity breakdowns by weekday.
+
+The app removes symptom pinning, the separate check-in answer editor and the changes-to-plans question. The automatic migration keeps recorded symptoms, activities, historical changes to plans, appearance and reminders. Older ChilliBook backup files remain readable.
+
+A signed 1.4 → 1.5 in-place upgrade preserved every retained field across 354 day records, 673 check-ins and 154 activities on the synthetic emulator. The release signer matched the previous APK. Check-in controls were inspected at normal and 200% font size.
 
 ## Release 1.4
 

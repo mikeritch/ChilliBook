@@ -59,6 +59,19 @@ internal class PatternIndex(val diary: Diary) {
         }
     }
 
+    fun activityCounts(start: LocalDate, end: LocalDate, names: List<String>): Map<String, Int> {
+        val counts = names.associateWith { 0 }.toMutableMap()
+        val factors = Factor.values()
+        val namesByTag = names.associateBy(::activityTagKey)
+        for (date in dateSequence(start, end)) {
+            val marked = activities[date.toString()].orEmpty().flatMap { it.tags }
+                .mapNotNull { namesByTag[activityTagKey(it)] }.toMutableSet()
+            factors.filter { it.label in counts && status(date, it) == true }.forEach { marked.add(it.label) }
+            marked.forEach { counts[it] = counts.getValue(it) + 1 }
+        }
+        return counts
+    }
+
     fun symptomDates(start: LocalDate, end: LocalDate, symptom: String, slot: String) =
         dateSequence(start, end).groupBy { date -> metric(date, slot, symptom) }
 

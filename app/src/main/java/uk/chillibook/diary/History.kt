@@ -137,7 +137,8 @@ fun DateDetail(diary: Diary,date: String,edit:(String)->Unit) {
                     val answer = when(activityFlag(day,activities,name)) { true -> "Yes"; false -> "No"; null -> "Unanswered" }
                     Text("$name · $answer")
                 }
-                listOfNotNull(day?.impact).plus(day?.context.orEmpty()).forEach { Text(it) }
+                day?.impact?.let { Text("Recorded change to plans · $it") }
+                day?.context.orEmpty().forEach { Text(it) }
             }
         }
         for (record in activities) {
@@ -147,10 +148,43 @@ fun DateDetail(diary: Diary,date: String,edit:(String)->Unit) {
             if(details.isNotEmpty()) Text(details.joinToString(" · "))
             record.worth?.let { Text("Worthwhile · $it") }
         }
-        if (activities.isNotEmpty()) for(n in 1..2) {
-            val energy = diary.checks.find { it.slot == "am" && it.date == local.plusDays(n.toLong()).toString() }?.energy
-            Text((if(n==1) "Next morning" else "Two mornings later") + " · " + (energy?.let(energyLabels::get) ?: "No entry"))
+        val today = LocalDate.now()
+        for ((offset, title) in listOf(-2L to "Two days earlier", -1L to "Previous day",
+            1L to "Next morning", 2L to "Two mornings later")) {
+            val nearby = local.plusDays(offset)
+            Spacer(Modifier.height(12.dp))
+            HorizontalDivider()
+            Column(Modifier.padding(vertical=8.dp), verticalArrangement=Arrangement.spacedBy(6.dp)) {
+                Text(title, Modifier.semantics { heading() }, fontFamily=FontFamily.Serif, fontSize=22.sp)
+                Text(nearby.label("EEEE, d MMMM yyyy"), color=MaterialTheme.colorScheme.onSurfaceVariant)
+                nearbyDayLines(diary, nearby, today, includeEvening=offset < 0).forEach { Text(it) }
+            }
         }
         Spacer(Modifier.height(16.dp))
+    }
+}
+
+internal fun nearbyDayLines(diary: Diary, date: LocalDate, today: LocalDate, includeEvening: Boolean): List<String> {
+    if (date > today) return listOf("Still to come")
+    val key = date.toString()
+    val checks = diary.checks.filter { it.date == key }
+    fun energy(slot: String) = checks.find { it.slot == slot }?.energy?.let(energyLabels::get) ?: "No entry"
+    return buildList {
+        add("Morning energy · ${energy("am")}")
+        if (includeEvening) {
+            add("Evening energy · ${energy("pm")}")
+            val day = diary.days.find { it.date == key }
+            val activities = diary.activities.filter { it.date == key }
+            val tags = activities.flatMap { it.tags }.distinct()
+            val summary = categoryTags.keys.mapNotNull { category ->
+                when (activityFlag(day, activities, category)) {
+                    true -> category.takeUnless { tags.any { tag -> tag in categoryTags.getValue(category) } }
+                    false -> "No ${category.lowercase()}"
+                    null -> null
+                }
+            } + tags
+            if (summary.isNotEmpty()) add(summary.joinToString(" · "))
+            if (!day?.context.isNullOrEmpty()) add(day?.context.orEmpty().joinToString(" · "))
+        }
     }
 }

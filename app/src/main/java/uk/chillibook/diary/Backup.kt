@@ -48,7 +48,7 @@ object Backup {
     private fun <T> rows(values: List<T>, encode: (T) -> JSONObject) = JSONArray(values.map(encode))
 
     fun encode(diary: Diary): String = obj(
-        "format" to "ChilliBook", "version" to 3,
+        "format" to "ChilliBook", "version" to 4,
         "days" to rows(diary.days) { d -> obj(
             "date" to d.date, "work" to d.work, "social" to d.social, "household" to d.household,
             "wellbeing" to d.wellbeing, "impact" to d.impact, "context" to set(d.context),
@@ -63,7 +63,7 @@ object Backup {
             "effort" to a.effort, "demands" to set(a.demands), "worth" to a.worth,
             "workLength" to a.workLength, "workPlace" to a.workPlace, "at" to a.at, "zone" to a.zone
         ) },
-        "prefs" to obj("id" to diary.prefs.id, "theme" to diary.prefs.theme, "pins" to set(diary.prefs.pins),
+        "prefs" to obj("id" to diary.prefs.id, "theme" to diary.prefs.theme,
             "morningReminder" to diary.prefs.morningReminder, "eveningReminder" to diary.prefs.eveningReminder)
     ).let { root ->
         Values().checkTree(root)
@@ -128,7 +128,7 @@ object Backup {
             result
         }
         val version = root.get("version") as Int
-        require(root.string("format") == "ChilliBook" && version in 1..3)
+        require(root.string("format") == "ChilliBook" && version in 1..4)
         val days = root.records("days", Day::date) {
             Day(date("date"), bool("work"), bool("social"), bool("household"), level("wellbeing", 0..4),
                 text("impact"), strings("context"), instant(), zone())
@@ -150,7 +150,7 @@ object Backup {
         val prefs = root.getJSONObject("prefs").run {
             require(get("id") == 1)
             val theme = string("theme").also { require(it in setOf("system", "light", "dark")) }
-            Prefs(1, theme, strings("pins"),
+            Prefs(1, theme,
                 morningReminder = if (version >= 2) level("morningReminder", 0..1439) else null,
                 eveningReminder = if (version >= 2) level("eveningReminder", 0..1439) else null)
         }

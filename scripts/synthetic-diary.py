@@ -26,7 +26,7 @@ def generate(end, length, version=1):
         social = age % 6 == 2
         chores = age % 5 == 3
         day_rec = dict(date=str(day), work=work, social=social, household=chores,
-                       wellbeing=[3, 2, 4, 2, 3, 1, 2][age % 7], impact=None,
+                       wellbeing=[3, 2, 4, 2, 3, 1, 2][age % 7], impact="Slowed down" if age == 4 else None,
                        context=["Fighting a bug"] if age == 13 else [], workOff="Planned day off" if not work else None, **stamp(day))
         days.append(day_rec)
         for slot in ("am", "pm"):
@@ -61,11 +61,13 @@ def generate(end, length, version=1):
                 prefs=dict(id=1, theme="system", pins=["Brain fog", "Heavy fatigue"]))
     if version >= 2:
         result["prefs"].update(morningReminder=480, eveningReminder=None)
-    if version == 3:
+    if version >= 3:
         del result["episodes"]
         for day in days:
             del day["workOff"]
         checks[0]["symptoms"]["Headache"] = -1
+    if version >= 4:
+        del result["prefs"]["pins"]
     return result
 
 
@@ -74,7 +76,7 @@ if __name__ == "__main__":
     parser.add_argument("output", type=Path)
     parser.add_argument("--end", type=date.fromisoformat, default=date.today())
     parser.add_argument("--days", type=int, choices=[28, 365], default=365)
-    parser.add_argument("--version", type=int, choices=[1, 2, 3], default=1)
+    parser.add_argument("--version", type=int, choices=[1, 2, 3, 4], default=1)
     args = parser.parse_args()
     data = generate(args.end, args.days, args.version)
     with args.output.open("x", encoding="utf-8") as stream:

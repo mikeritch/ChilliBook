@@ -54,6 +54,20 @@ class PatternAnalysisTest {
             index.symptomDates(monday, wednesday, "Headache", "pm"))
     }
 
+    @Test fun crossActivityCountsIncludeLegacyAndCustomTagsOncePerDay() {
+        val name = customActivityTag("Garden")
+        val index = PatternIndex(Diary(days = listOf(Day(wednesday.toString(), work = false)), activities = listOf(
+            ActivityEntry(date = monday.toString(), tags = setOf("Meetings", "Call", name)),
+            ActivityEntry(date = monday.toString(), tags = setOf("Work", customActivityTag("garden"))),
+            ActivityEntry(date = wednesday.toString(), tags = setOf(customActivityTag("GARDEN"))),
+            ActivityEntry(date = wednesday.plusDays(1).toString(), tags = setOf("Work"))
+        )))
+        val names = listOf("Work", "Meetings", "Socialising", "Call", name, "Household")
+        val counts = index.activityCounts(monday, wednesday, names)
+        assertEquals(listOf(1, 1, 1, 1, 2, 0), names.map(counts::getValue))
+        names.forEach { assertEquals(counts[it], index.activityDates(monday, wednesday, it)[true].orEmpty().size) }
+    }
+
     @Test fun incompleteAndFutureFollowUpsAreExcludedUntilEligible() {
         val index = PatternIndex(Diary(days = listOf(
             Day(monday.toString(), work = false, wellbeing = 0),

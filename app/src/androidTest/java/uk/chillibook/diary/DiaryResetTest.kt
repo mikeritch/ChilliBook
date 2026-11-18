@@ -27,7 +27,7 @@ class DiaryResetTest {
         val fixture = Diary(days = listOf(Day(date, work = false)),
             checks = listOf(Check(date, "am", energy = 1)),
             activities = listOf(ActivityEntry(date = date, tags = setOf("Hobby"))),
-            prefs = Prefs(theme = "dark", pins = emptySet(), eveningReminder = 1200))
+            prefs = Prefs(theme = "dark", eveningReminder = 1200))
         val delivery = context.getSharedPreferences("reminder_delivery", Context.MODE_PRIVATE)
         Storage(context).use { storage ->
             assumeTrue(runBlocking { storage.read() } == Diary() && delivery.all.isEmpty())
