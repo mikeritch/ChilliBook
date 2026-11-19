@@ -73,15 +73,18 @@ fun HistoryScreen(diary: Diary, manageMedication: () -> Unit, open: (String) -> 
                 trailingIcon=if (query.isNotEmpty()) {
                     { TextButton(onClick={ query="" }) { Text("Clear") } }
                 } else null)
-            if (query.isBlank()) Text(month.atDay(1).label("MMMM yyyy") + "   ⌄",
-                Modifier.clickable(role=Role.Button) {
+            if (query.isBlank()) {
+                OutlinedButton(onClick = {
                     DatePickerDialog(context, { _, year, m, _ ->
                         monthKey = YearMonth.of(year,m+1).toString()
                         scope.launch { list.scrollToItem(0) }
                     }, latest.year, latest.monthValue-1, latest.dayOfMonth).apply {
                         datePicker.maxDate = System.currentTimeMillis()
                     }.show()
-                }.heightIn(min=48.dp).wrapContentHeight(),color=MaterialTheme.colorScheme.onSurfaceVariant)
+                }, modifier = Modifier.heightIn(min = 48.dp)) {
+                    Text(month.atDay(1).label("MMMM yyyy") + "   ⌄")
+                }
+            }
         }
         if (query.isNotBlank()) {
             if (matches.isEmpty()) item { Text("No matching dates.", Modifier.padding(vertical=16.dp)) }
@@ -163,28 +166,30 @@ fun DateDetail(diary: Diary,date: String,edit:(String)->Unit) {
         Text(local.label("EEEE"),fontFamily=FontFamily.Serif,fontSize=38.sp,lineHeight=44.sp)
         Text(local.label("d MMMM yyyy"),color=MaterialTheme.colorScheme.onSurfaceVariant)
         if (checks.isEmpty() && day == null && activities.isEmpty() && diary.doses.none { it.date == date }) Text("No entry")
+        val largeType = LocalDensity.current.fontScale > 1.35f
         for ((slot, label) in listOf("am" to "Morning","pm" to "Evening")) {
             Spacer(Modifier.height(8.dp))
             Row(verticalAlignment=Alignment.CenterVertically) {
                 Icon(painterResource(if (slot == "am") R.drawable.diary_sun else R.drawable.diary_moon), null,
                     Modifier.padding(end=8.dp).size(28.dp), tint=androidx.compose.ui.graphics.Color.Unspecified)
                 Text(label,Modifier.weight(1f),fontSize=22.sp,fontFamily=FontFamily.Serif)
-                TextButton(onClick={edit(slot)}) { Text("Edit " + label.lowercase()) }
+                if (!largeType) OutlinedButton(onClick = { edit(slot) }) { Text("Edit " + label.lowercase()) }
             }
+            if (largeType) OutlinedButton(onClick = { edit(slot) }) { Text("Edit " + label.lowercase()) }
+            val check = checks.find { it.slot == slot }
+            Text("Energy · " + (check?.energy?.let(energyLabels::get) ?: "No entry"))
+            if (slot == "am") Text("Waking refreshment · " + (check?.sleep?.let(sleepLabels::get) ?: "No entry"))
+            for ((name, value) in check?.symptoms.orEmpty()) Text("$name · ${symptomRatingLabel(value)}")
             diary.courses.forEach { course ->
                 val actual = diary.doses.filter { it.courseId == course.id && it.date == date && it.slot == slot }
                 val plan = diary.scheduledRegimen(course, date)
-                if (plan != null && plan.dueIn(slot) && plan.schedule != "As needed" && actual.none { !it.asNeeded }) {
-                    Text(listOf(course.name, medicationAmount(plan.strength, plan.amount, plan.unit), "Unlogged").filter { it.isNotBlank() }.joinToString(" · "))
+                if (plan != null && plan.scheduledDoseDueIn(slot) && actual.none { !it.asNeeded }) {
+                    Text(listOf(course.name, medicationAmount(plan.strength, plan.amount, plan.unit), ASSUMED_TAKEN_LABEL).filter { it.isNotBlank() }.joinToString(" · "))
                 }
                 actual.forEach { dose ->
                     Text(listOfNotNull(course.name, dose.status, dose.schedule, medicationAmount(dose.strength, dose.amount, dose.unit).ifBlank { null }, dose.time, dose.reason).joinToString(" · "))
                 }
             }
-            val check = checks.find { it.slot == slot }
-            Text("Energy · " + (check?.energy?.let(energyLabels::get) ?: "No entry"))
-            if (slot == "am") Text("Waking refreshment · " + (check?.sleep?.let(sleepLabels::get) ?: "No entry"))
-            for ((name, value) in check?.symptoms.orEmpty()) Text("$name · ${symptomRatingLabel(value)}")
             if (slot == "pm") {
                 Text("Overall wellbeing · " + (day?.wellbeing?.let(wellbeingLabels::get) ?: "No entry"))
                 categoryTags.keys.forEach { name ->

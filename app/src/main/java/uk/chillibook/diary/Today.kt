@@ -56,14 +56,19 @@ fun TodayScreen(diary: Diary, date: String, slot: String, onDate: (String) -> Un
                     edit { d -> d.changeDay(date) { answer -> answer.copy(wellbeing = level.takeUnless { it == answer.wellbeing }) } }
                 }
             }
-            Spacer(Modifier.height(20.dp))
-            key(date, slot) { TodayMedication(diary, date, slot, edit, manageMedication) }
             if (!morning) {
                 Spacer(Modifier.height(28.dp))
                 key(date) { EveningActivities(diary, date, edit) }
             }
             Spacer(Modifier.height(28.dp))
             key(date, slot) { TodayDetails(diary, date, slot, edit) }
+            Spacer(Modifier.height(20.dp))
+            key(date, slot) { TodayMedication(diary, date, slot, edit, manageMedication) }
+            if (!morning) {
+                MultiField("Context", listOf("Fighting a bug", "Unusual stress", "Change in medication"), day?.context.orEmpty()) { value ->
+                    edit { d -> d.changeDay(date) { it.copy(context = it.context.toggle(value)) } }
+                }
+            }
             Spacer(Modifier.height(24.dp))
         }
         SaveNotice(status, retry)
@@ -73,9 +78,9 @@ fun TodayScreen(diary: Diary, date: String, slot: String, onDate: (String) -> Un
 @Composable
 private fun CheckInDateSelector(date: String, openCalendar: () -> Unit) {
     val prettyDate = LocalDate.parse(date).format(DateTimeFormatter.ofPattern("EEEE, d MMM", Locale.getDefault()))
-    Text("$prettyDate   ⌄", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant,
-        modifier = Modifier.clickable(role = Role.Button, onClickLabel = "Choose date", onClick = openCalendar)
-            .heightIn(min = 48.dp).wrapContentHeight())
+    OutlinedButton(onClick = openCalendar, modifier = Modifier.heightIn(min = 48.dp)) {
+        Text("$prettyDate   ⌄", style = MaterialTheme.typography.bodyLarge)
+    }
 }
 
 @Composable

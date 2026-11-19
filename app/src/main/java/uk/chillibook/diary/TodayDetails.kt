@@ -11,7 +11,6 @@ import androidx.compose.ui.unit.dp
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 internal fun TodayDetails(diary: Diary, date: String, slot: String, edit: DiaryEdit) {
-    val day = diary.days.find { it.date == date }
     val check = diary.checks.find { it.date == date && it.slot == slot }
     val symptoms = check?.symptoms.orEmpty()
     val names = (symptomLabels + symptoms.keys.sorted()).distinct()
@@ -55,11 +54,6 @@ internal fun TodayDetails(diary: Diary, date: String, slot: String, edit: DiaryE
         }
     }
 
-    if (slot == "pm") {
-        MultiField("Context", listOf("Fighting a bug", "Unusual stress", "Change in medication"), day?.context.orEmpty()) { value ->
-            edit { d -> d.changeDay(date) { it.copy(context = it.context.toggle(value)) } }
-        }
-    }
 }
 
 @Composable

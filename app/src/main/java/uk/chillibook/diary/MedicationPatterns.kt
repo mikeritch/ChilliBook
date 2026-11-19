@@ -134,13 +134,13 @@ fun MedicationPatterns(diary: Diary, start: LocalDate, end: LocalDate, initialCo
                         val name = courses.firstOrNull { it.id == other.courseId }?.name.orEmpty()
                         Text("${other.date.display()} · $name · ${other.label}")
                     }
-                    TextButton(onClick = { expanded = if (expanded == n) -1 else n }) {
+                    OutlinedButton(onClick = { expanded = if (expanded == n) -1 else n }) {
                         Text(if (expanded == n) "Hide dates" else "See dates")
                     }
                     if (expanded == n) rows.forEach { row ->
                         var show by rememberSaveable(course.id, row.day.toString()) { mutableStateOf(false) }
                         val following = if (row.observation != row.day) " → ${row.observation.display()}" else ""
-                        TextButton(onClick = { show = !show }) {
+                        OutlinedButton(onClick = { show = !show }) {
                             Text("${row.day.display()}$following · ${row.label(measure.symptom)}")
                         }
                         if (show) MedicationDateDetail(diary, index, course, row.day, today, symptom, openDay)
@@ -172,7 +172,14 @@ private fun MedicationDateDetail(diary: Diary, index: PatternIndex, course: Medi
     val regimen = diary.scheduledRegimen(course, dateKey)
     if (regimen != null) Text(listOfNotNull(course.name, regimen.schedule,
         medicationAmount(regimen.strength, regimen.amount, regimen.unit).ifBlank { null }).joinToString(" · "))
-    if (doses.isEmpty()) Text(when {
+    val scheduledSlots = listOf("am" to "Morning", "pm" to "Evening").filter { (slot, _) ->
+        regimen?.scheduledDoseDueIn(slot) == true && doses.none { !it.asNeeded && it.slot == slot }
+    }
+    for ((_, label) in scheduledSlots) {
+        val status = if (date > today) "Scheduled" else ASSUMED_TAKEN_LABEL
+        Text("$label · $status")
+    }
+    if (doses.isEmpty() && scheduledSlots.isEmpty()) Text(when {
         !course.includesMedicationDate(dateKey) -> "Outside the dated schedule"
         regimen == null -> "No dated schedule or dose recorded"
         else -> "No dose answer recorded"
@@ -198,5 +205,5 @@ private fun MedicationDateDetail(diary: Diary, index: PatternIndex, course: Medi
         val value = MedicationReading(date, day, day > today, index.metric(day, measure.slot, symptom.takeIf { measure.symptom }))
         Text("$label · ${day.display()} · ${value.label(measure.symptom)}")
     }
-    if (date <= today) TextButton(onClick = { openDay(dateKey) }) { Text("Open check-in") }
+    if (date <= today) OutlinedButton(onClick = { openDay(dateKey) }) { Text("Open check-in") }
 }

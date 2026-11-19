@@ -50,7 +50,7 @@ fun MedicationManagement(diary: Diary, edit: ((Diary) -> Diary) -> Unit, onPatte
                         FilterChip(past == ended, { past = ended; expanded = null }, { Text(label) })
                     }
                 }
-                OutlinedButton(onClick = { expanded = null; form = MedicineForm.Add }) { Text("Add medication") }
+                FilledTonalButton(onClick = { expanded = null; form = MedicineForm.Add }) { Text("Add medication") }
                 val visible = diary.courses.filter { it.ended == past }.sortedWith(
                     compareBy<MedicationCourse> { it.name.lowercase() }.thenByDescending { it.start })
                 if (visible.isEmpty()) Text(if (past) "No past medications." else "No current medications.")
@@ -60,14 +60,14 @@ fun MedicationManagement(diary: Diary, edit: ((Diary) -> Diary) -> Unit, onPatte
                     Text(course.name, style = MaterialTheme.typography.titleLarge)
                     Text("${displayDate(course.start)} – " + if (course.ended) displayDate(course.end) else "present")
                     history.firstOrNull()?.let { Text(it.description()) }
-                    TextButton(onClick = { expanded = if (expanded == course.id) null else course.id }) {
+                    OutlinedButton(onClick = { expanded = if (expanded == course.id) null else course.id }) {
                         Text(if (expanded == course.id) "Hide details" else "Show details")
                     }
                     if (expanded == course.id) {
                         if (course.ended) Text("Stopped · ${displayDate(course.end)}")
                         history.forEach { regimen ->
                             Text("${displayDate(regimen.effective)} · ${regimen.description()}")
-                            TextButton(onClick = { regimenId = regimen.id; form = MedicineForm.Regimen }) {
+                            OutlinedButton(onClick = { regimenId = regimen.id; form = MedicineForm.Regimen }) {
                                 Text("Correct regimen")
                             }
                         }
@@ -78,8 +78,8 @@ fun MedicationManagement(diary: Diary, edit: ((Diary) -> Diary) -> Unit, onPatte
                             } else {
                                 OutlinedButton(onClick = { form = MedicineForm.Stop }) { Text("Record stop date") }
                             }
-                            TextButton(onClick = { form = MedicineForm.Course }) { Text("Correct course details") }
-                            TextButton(onClick = { onPatterns(course.id) }) { Text("View in Patterns") }
+                            OutlinedButton(onClick = { form = MedicineForm.Course }) { Text("Correct course details") }
+                            OutlinedButton(onClick = { onPatterns(course.id) }) { Text("View in Patterns") }
                         }
                     }
                 }
@@ -204,7 +204,7 @@ private fun MedicineEditor(
             }
             saved(updated)
         }) { Text("Save") }
-        TextButton(onClick = cancel) { Text("Cancel") }
+        OutlinedButton(onClick = cancel) { Text("Cancel") }
     }
 }
 
@@ -222,6 +222,6 @@ private fun MedicineDate(label: String, date: String?, optional: Boolean = true,
         OutlinedButton(onClick = { chooseDiaryDate(context, date ?: LocalDate.now().toString()) { change(it) } }) {
             Text(displayDate(date))
         }
-        if (optional && date != null) TextButton(onClick = { change(null) }) { Text("Date unknown") }
+        if (optional && date != null) OutlinedButton(onClick = { change(null) }) { Text("Date unknown") }
     }
 }

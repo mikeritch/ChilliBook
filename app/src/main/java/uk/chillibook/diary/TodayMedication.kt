@@ -20,7 +20,7 @@ internal fun TodayMedication(diary: Diary, date: String, slot: String, edit: ((D
         FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween,
             verticalArrangement = Arrangement.Center) {
             Text("Medications", Modifier.padding(end = 12.dp, top = 8.dp), style = MaterialTheme.typography.titleLarge)
-            TextButton(onClick = manage) { Text(if (diary.courses.isEmpty()) "Add medication" else "Manage medications") }
+            FilledTonalButton(onClick = manage) { Text(if (diary.courses.isEmpty()) "Add medication" else "Manage medications") }
         }
         val courses = diary.courses.filter { c ->
             diary.scheduledRegimen(c, date)?.dueIn(slot) == true || records.any { it.courseId == c.id }
@@ -39,11 +39,11 @@ internal fun TodayMedication(diary: Diary, date: String, slot: String, edit: ((D
                         val detail = if (scheduled == null) medicationAmount(regimen?.strength, regimen?.amount, regimen?.unit)
                             else medicationAmount(scheduled.strength, scheduled.amount, scheduled.unit)
                         val schedule = if (scheduled != null) scheduled.schedule else regimen?.schedule
-                        Text(listOfNotNull(detail.ifBlank { null }, schedule, scheduled?.status ?: "Unlogged").joinToString(" · "),
+                        Text(listOfNotNull(detail.ifBlank { null }, schedule, scheduled?.status ?: ASSUMED_TAKEN_LABEL).joinToString(" · "),
                             style = MaterialTheme.typography.bodyMedium)
                         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             listOf("Taken", "Skipped").forEach { status ->
-                                AnswerTile(course.name, status, scheduled?.status == status) {
+                                AnswerTile(course.name, status, (scheduled?.status ?: "Taken") == status) {
                                     edit { it.recordMedication(course, date, slot, status) }
                                 }
                             }
@@ -66,7 +66,7 @@ private fun AsNeededDose(number: Int, dose: MedicationDose, edit: ((Diary) -> Di
     fun update(fn: (MedicationDose) -> MedicationDose) {
         edit { d -> d.copy(doses = d.doses.map { if (it.id == dose.id) fn(it) else it }) }
     }
-    TextButton(onClick = { expanded = !expanded }) {
+    OutlinedButton(onClick = { expanded = !expanded }) {
         Text(listOfNotNull("Dose $number", dose.time, medicationAmount(dose.strength, dose.amount, dose.unit).ifBlank { null },
             dose.reason, if (expanded) "Hide details" else "Edit").joinToString(" · "))
     }
@@ -81,12 +81,12 @@ private fun AsNeededDose(number: Int, dose: MedicationDose, edit: ((Diary) -> Di
         }
         Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
             OutlinedButton(onClick = picker) { Text(dose.time?.let { "Time · $it" } ?: "Add time") }
-            if (dose.time != null) TextButton(onClick = { update { it.copy(time = null) } }) { Text("Clear time") }
+            if (dose.time != null) OutlinedButton(onClick = { update { it.copy(time = null) } }) { Text("Clear time") }
             OutlinedTextField(amount, { amount = it }, label = { Text("Amount (optional)") }, singleLine = true, modifier = Modifier.fillMaxWidth())
             OutlinedTextField(unit, { unit = it }, label = { Text("Unit (optional)") }, singleLine = true, modifier = Modifier.fillMaxWidth())
             OutlinedTextField(reason, { reason = it }, label = { Text("Reason or note (optional)") }, modifier = Modifier.fillMaxWidth())
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                TextButton(onClick = { edit { d -> d.copy(doses = d.doses.filterNot { it.id == dose.id }) } }) { Text("Remove dose", color = MaterialTheme.colorScheme.error) }
+                OutlinedButton(onClick = { edit { d -> d.copy(doses = d.doses.filterNot { it.id == dose.id }) } }) { Text("Remove dose", color = MaterialTheme.colorScheme.error) }
                 Button(onClick = {
                     update { it.copy(amount = amount.trim().ifBlank { null }, unit = unit.trim().ifBlank { null }, reason = reason.trim().ifBlank { null }) }
                     expanded = false

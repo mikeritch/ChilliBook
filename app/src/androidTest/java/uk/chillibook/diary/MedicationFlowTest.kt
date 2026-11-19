@@ -62,17 +62,34 @@ class MedicationFlowTest {
                 runBlocking { store.replace(initial.copy(checks = earlierChecks, courses = listOf(scheduled, prn, past), regimens = listOf(regimen, asNeeded))) }
                 ActivityScenario.launch(MainActivity::class.java).use {
                     compose.waitUntil(15_000) { compose.onAllNodesWithContentDescription("Morning check-in").fetchSemanticsNodes().isNotEmpty() }
-                    compose.onNodeWithContentDescription("Morning check-in").performScrollTo().performClick()
+                    for (slot in listOf("Evening", "Morning")) {
+                        compose.onNodeWithContentDescription("$slot check-in").performScrollTo().performClick()
+                        val symptoms = compose.onNodeWithText("Symptoms").getUnclippedBoundsInRoot()
+                        val medications = compose.onNodeWithText("Medications").getUnclippedBoundsInRoot()
+                        assertTrue("$slot symptoms should precede medications", symptoms.bottom <= medications.top)
+                    }
                     val taken = compose.onNodeWithContentDescription("Daily tablet, Taken")
                     val skipped = compose.onNodeWithContentDescription("Daily tablet, Skipped")
-                    taken.performScrollTo().assertIsNotSelected().performClick().assertIsSelected()
+                    val assumed = compose.onNodeWithText("Assumed taken", substring = true)
+                    assumed.assertExists()
+                    taken.performScrollTo().assertIsSelected()
+                    skipped.assertIsNotSelected()
+                    assertTrue(runBlocking { store.read() }.doses.isEmpty())
+                    compose.onNodeWithContentDescription("Occasional tablet, Taken").assertDoesNotExist()
+                    taken.performClick().assertIsSelected()
+                    assumed.assertDoesNotExist()
                     stored { d -> d.doses.singleOrNull()?.status == "Taken" && d.days.isEmpty() && d.checks.none { it.date == today.toString() } && d.activities.isEmpty() }
                     val firstId = runBlocking { store.read() }.doses.single().id
                     skipped.performScrollTo().performClick().assertIsSelected()
                     stored { d -> d.doses.singleOrNull()?.let { it.id == firstId && it.status == "Skipped" } == true }
                     skipped.performClick().assertIsNotSelected()
                     stored { d -> d.doses.isEmpty() }
-                    taken.assertIsNotSelected()
+                    taken.assertIsSelected()
+                    assumed.assertExists()
+                    compose.onNodeWithText("Medications").performScrollTo().assertIsDisplayed()
+                    compose.onNodeWithText("Manage medications").assertIsDisplayed()
+                    taken.assertIsDisplayed()
+                    picture(if (large) "today-large" else "today")
 
                     repeat(2) {
                         tap("+  Add as-needed dose")
@@ -83,12 +100,6 @@ class MedicationFlowTest {
                     assertEquals(2, occurrences.map { it.id }.distinct().size)
                     assertTrue(occurrences.all { it.courseId == prn.id && it.asNeeded && it.date == today.toString() && it.slot == "am" })
                     compose.onNodeWithText("Dose 2", substring = true).performScrollTo().assertIsDisplayed()
-                    if (large) {
-                        skipped.performScrollTo().assertIsDisplayed()
-                        picture("today-large")
-                    } else {
-                        picture("today")
-                    }
                     tap("Manage medications")
                     if (!large) {
                         tap("Add medication")

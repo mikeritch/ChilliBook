@@ -65,6 +65,11 @@ internal fun MedicationRegimen.dueIn(slot: String): Boolean = when (schedule) {
     else -> false
 }
 
+internal const val ASSUMED_TAKEN_LABEL = "Assumed taken"
+
+internal fun MedicationRegimen.scheduledDoseDueIn(slot: String): Boolean =
+    schedule != "As needed" && dueIn(slot)
+
 internal fun medicationAmount(strength: String?, amount: String?, unit: String?) =
     listOfNotNull(strength, listOfNotNull(amount, unit).joinToString(" ").ifBlank { null }).joinToString(" · ")
 
@@ -80,7 +85,7 @@ internal fun Diary.recordMedication(course: MedicationCourse, date: String, slot
             doses.map { if (it.id == old.id) old.copy(status = status) else it })
     }
     val regimen = scheduledRegimen(course, date) ?: return this
-    if (!regimen.dueIn(slot) || regimen.schedule == "As needed") return this
+    if (!regimen.scheduledDoseDueIn(slot)) return this
     return copy(doses = doses + regimen.log(date, slot, status))
 }
 

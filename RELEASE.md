@@ -7,7 +7,7 @@
 **Over USB.** Enable USB debugging and authorise the computer on the phone. Place the signed APK beside [Install ChilliBook.command](<release/Install ChilliBook.command>) and double-click the command on macOS. With Android SDK Platform-Tools on your path, you can also run the following from the project root.
 
 ```sh
-adb -d install -r release/ChilliBook-1.8.apk
+adb -d install -r release/ChilliBook-1.8.1.apk
 ```
 
 ## Back up or move the diary
@@ -26,12 +26,18 @@ Choose **Settings → Back up diary** and select a private destination. The JSON
 apk=app/build/outputs/apk/release/app-release.apk
 apksigner verify --print-certs "$apk"
 aapt dump badging "$apk" | head -1
-version=1.8  # set to the version you just built
+version=1.8.1  # set to the version you just built
 cp "$apk" "release/ChilliBook-$version.apk"
 git tag "v$version"
 git push origin HEAD "v$version"
 gh release create "v$version" "release/ChilliBook-$version.apk" --verify-tag --generate-notes --latest
 ```
+
+## Version 1.8.1
+
+Medications appears below Symptoms. Scheduled doses start with **Taken** selected and show **Assumed taken**. Tap **Skipped** to record an exception, or **Taken** to confirm a dose. Tapping an explicit answer again restores the schedule default. History and Patterns distinguish assumed and recorded doses. As-needed doses are logged individually. Standalone actions including **Manage medications** now have visible button shapes. Existing diaries and backups use the same schema as 1.8.
+
+The signed 1.8 → 1.8.1 emulator update preserved all synthetic records and preferences. The medication flow passed at [normal text](verification/1.8.1/medications.png) and [200% text](verification/1.8.1/medications-large.png).
 
 ## Release 1.8
 
