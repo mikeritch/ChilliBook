@@ -93,7 +93,7 @@ internal fun Diary.changes(course: MedicationCourse): List<MedicationChange> {
     }.sortedBy { it.date }
 }
 
-private data class MedicineChoice(val course: MedicationCourse, val event: MedicationChange? = null,
+internal data class MedicineChoice(val course: MedicationCourse, val event: MedicationChange? = null,
     val asNeeded: Boolean = false, val latest: String? = event?.date?.toString()) {
     val key = "${course.id}/${event?.entryKey ?: if (asNeeded) "prn" else "undated"}"
     val caption = when {
@@ -103,9 +103,9 @@ private data class MedicineChoice(val course: MedicationCourse, val event: Medic
     }
 }
 
-private fun Diary.medicineChoices(): List<MedicineChoice> = courses.flatMap { course ->
+internal fun Diary.medicineChoices(): List<MedicineChoice> = courses.flatMap { course ->
     val plans = regimens.filter { it.courseId == course.id }
-    val lastDose = doses.asSequence().filter { it.courseId == course.id && it.asNeeded }.maxOfOrNull { it.date }
+    val lastDose = doses.asSequence().filter { it.courseId == course.id && it.asNeeded && it.status == "Taken" }.maxOfOrNull { it.date }
     val prn = plans.any { it.schedule == "As needed" } || lastDose != null
     val changes = if (prn && plans.none { it.schedule != null && it.schedule != "As needed" }) emptyList()
         else changes(course)
@@ -117,15 +117,24 @@ private fun Diary.medicineChoices(): List<MedicineChoice> = courses.flatMap { co
 }.sortedWith(compareByDescending<MedicineChoice> { it.latest }.thenByDescending { it.event?.stop == true }
     .thenBy { it.course.name.lowercase() }.thenBy { it.key })
 
+internal fun Diary.asNeededDoses(start: LocalDate?, end: LocalDate?): Map<String, List<MedicationDose>> {
+    val first = start?.toString()
+    val last = end?.toString()
+    return doses.filter { it.asNeeded && it.status == "Taken" && (first == null || it.date >= first) && (last == null || it.date <= last) }
+        .groupBy { it.courseId }
+}
+
 @Composable
 internal fun MedicationPatterns(diary: Diary, index: PatternIndex, today: LocalDate, initialCourseId: String?,
-    openDay: (String) -> Unit, exit: () -> Unit) {
+    openDay: (String) -> Unit, initialChoiceKey: String? = null, initialMeasure: MedicationMeasure? = null,
+    initialSymptom: String? = null, initialDay: String? = null, initialStart: LocalDate? = null,
+    initialEnd: LocalDate? = null, exit: () -> Unit) {
     val options = remember(diary.courses, diary.regimens, diary.doses) { diary.medicineChoices() }
-    var selected by rememberSaveable(initialCourseId) { mutableStateOf<String?>(null) }
+    var selected by rememberSaveable(initialCourseId, initialChoiceKey) { mutableStateOf(initialChoiceKey) }
     val choice = options.find { it.key == selected } ?: options.find { it.course.id == initialCourseId } ?: options.firstOrNull() ?: return
     var picking by rememberSaveable { mutableStateOf(false) }
-    var day by rememberSaveable(choice.key) { mutableStateOf<String?>(null) }
-    var symptom by rememberSaveable { mutableStateOf("Brain fog") }
+    var day by rememberSaveable(choice.key, initialDay) { mutableStateOf(initialDay.takeIf { choice.key == initialChoiceKey }) }
+    var symptom by rememberSaveable(initialSymptom) { mutableStateOf(initialSymptom ?: "Brain fog") }
     val states = rememberSaveableStateHolder()
     val back = {
         if (day != null) day = null else if (picking) picking = false else exit()
@@ -177,8 +186,9 @@ internal fun MedicationPatterns(diary: Diary, index: PatternIndex, today: LocalD
                 if (event != null && event.detail.isNotBlank()) Text(event.detail, style = MaterialTheme.typography.bodyMedium)
             }
             if (choice.asNeeded) {
-                val days = remember(diary.doses, choice.course.id) {
-                    diary.doses.filter { it.courseId == choice.course.id && it.asNeeded }.groupBy { it.date }.toSortedMap(reverseOrder())
+                val days = remember(diary.doses, choice.course.id, initialStart, initialEnd) {
+                    diary.asNeededDoses(initialStart, initialEnd)[choice.course.id].orEmpty()
+                        .groupBy { it.date }.toSortedMap(reverseOrder())
                 }
                 LazyColumn(frame, contentPadding = PaddingValues(bottom = 20.dp), verticalArrangement = gap) {
                     item { Column(verticalArrangement = gap) { top() } }
@@ -188,7 +198,7 @@ internal fun MedicationPatterns(diary: Diary, index: PatternIndex, today: LocalD
                                 Text("On the days you took it", style = MaterialTheme.typography.headlineSmall, fontFamily = FontFamily.Serif)
                                 val withReason = days.values.count { doses -> doses.any { !it.reason.isNullOrBlank() } }
                                 val coverage = when {
-                                    days.isEmpty() -> "No as-needed doses recorded yet."
+                                    days.isEmpty() -> if (initialStart == null) "No as-needed doses recorded yet." else "No as-needed doses recorded in this period."
                                     withReason == 0 -> "You haven’t added a reason for these doses."
                                     withReason == 1 && days.size == 1 -> "You recorded why you took it that day."
                                     else -> "You recorded why you took it on $withReason of ${days.size} dose days."
@@ -212,7 +222,7 @@ internal fun MedicationPatterns(diary: Diary, index: PatternIndex, today: LocalD
                 Column(frame.verticalScroll(rememberScrollState()).padding(bottom = 20.dp), verticalArrangement = gap) {
                     top()
                     if (event == null) Text("There’s no dated start, change or stop to compare for this course.")
-                    else MedicationWeeks(diary, index, event, today, symptom, { symptom = it }, { day = it.toString() })
+                    else MedicationWeeks(diary, index, event, today, symptom, { symptom = it }, { day = it.toString() }, initialMeasure)
                 }
             }
         }

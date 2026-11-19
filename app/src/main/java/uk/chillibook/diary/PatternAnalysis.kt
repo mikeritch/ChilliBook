@@ -38,7 +38,8 @@ internal class PatternIndex(val diary: Diary) {
     val checks = diary.checks.associateBy { it.date to it.slot }
     val activities = diary.activities.groupBy { it.date }
     val first = (days.keys.asSequence() + diary.checks.asSequence().map { it.date } +
-        activities.keys.asSequence()).minOrNull()?.let(LocalDate::parse)
+        activities.keys.asSequence() + diary.courses.asSequence().flatMap { sequenceOf(it.start, it.end).filterNotNull() } +
+        diary.regimens.asSequence().mapNotNull { it.effective } + diary.doses.asSequence().map { it.date }).minOrNull()?.let(LocalDate::parse)
 
     fun status(date: LocalDate, factor: Factor): Boolean? {
         val key = date.toString()

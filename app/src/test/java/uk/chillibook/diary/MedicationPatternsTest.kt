@@ -5,6 +5,20 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class MedicationPatternsTest {
+    @Test fun overviewDoseWindowIncludesBothEdgesAndPreservesRepeatedOccurrences() {
+        val dose = MedicationDose(id = "first", courseId = "a", regimenId = "r", date = "2026-11-01",
+            slot = "pm", status = "Taken", asNeeded = true)
+        val diary = Diary(doses = listOf(
+            dose.copy(id = "older", date = "2026-10-31"), dose, dose.copy(id = "repeat"),
+            dose.copy(id = "skipped", status = "Skipped"), dose.copy(id = "scheduled", asNeeded = false), dose.copy(id = "other", courseId = "b"),
+            dose.copy(id = "last", date = "2026-11-07"), dose.copy(id = "later", date = "2026-11-08")
+        ))
+        val period = diary.asNeededDoses(LocalDate.parse("2026-11-01"), LocalDate.parse("2026-11-07"))
+        assertEquals(listOf("first", "repeat", "last"), period.getValue("a").map { it.id })
+        assertEquals(listOf("other"), period.getValue("b").map { it.id })
+        assertEquals(5, diary.asNeededDoses(null, null).getValue("a").size)
+    }
+
     @Test fun stopIsInclusiveAndComparisonUsesOnlyRatedDates() {
         val date = LocalDate.of(2026, 11, 8)
         val stop = MedicationChange("course", date, "Last day", stop = true)

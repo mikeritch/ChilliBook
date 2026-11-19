@@ -226,3 +226,11 @@ Place Medications immediately below Symptoms in both check-ins. Preselect Taken 
 ## Medication patterns · 1.9
 
 Open the latest medication change directly, or the selected course from History. Use one Switch action for dated changes and as-needed courses. For scheduled changes, compare two calendar weeks, leading with a plain-language observation and tappable daily readings. Opening a date shows the dose, diary context, and the next two dated morning entries. For as-needed medication, open the list of actual dose days directly. Keep repeat doses, uncertain status, missing readings and future follow-ups distinct. Use the existing diary on device.
+
+## Patterns overview · 1.10
+
+Choose 7 days, 28 days, 90 days or All time from the dropdown beside Patterns. Keep the historical end date selectable. Lead with morning and evening energy on the same scale. Use daily readings for 7 and 28 days, weekly medians for 90 days and All time, and preserve gaps. View daily readings opens the original calendar dates.
+
+For each activity, compare low readings that evening and on the next two calendar mornings. Select activity dates inside the chosen range and use any available follow-up readings, including ones beyond its end. Show the recorded denominator on each tile. Pair morning and evening symptom bars on the same scale and count moderate or strong ratings among severity-rated observations. Tap either comparison to open its dates. Keep the full activity frequency and symptom distributions accessible.
+
+For medications, plot the diary measure across a dated change or mark actual as-needed dose days. Use the same course, measure and selected period when opening the detailed comparison. Retain the medication history shortcut and distinguish the final day of a course from its first day off.

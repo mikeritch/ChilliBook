@@ -7,7 +7,7 @@
 **Over USB.** Enable USB debugging and authorise the computer on the phone. Place the signed APK beside [Install ChilliBook.command](<release/Install ChilliBook.command>) and double-click the command on macOS. With Android SDK Platform-Tools on your path, you can also run the following from the project root.
 
 ```sh
-adb -d install -r release/ChilliBook-1.9.apk
+adb -d install -r release/ChilliBook-1.10.apk
 ```
 
 ## Back up or move the diary
@@ -26,12 +26,20 @@ Choose **Settings → Back up diary** and select a private destination. The JSON
 apk=app/build/outputs/apk/release/app-release.apk
 apksigner verify --print-certs "$apk"
 aapt dump badging "$apk" | head -1
-version=1.9  # set to the version you just built
+version=1.10  # set to the version you just built
 cp "$apk" "release/ChilliBook-$version.apk"
 git tag "v$version"
 git push origin HEAD "v$version"
 gh release create "v$version" "release/ChilliBook-$version.apk" --verify-tag --generate-notes --latest
 ```
+
+## Release 1.10
+
+Patterns opens with your morning and evening energy and a range dropdown. Choose 7, 28, 90 days or All time. Longer ranges show weekly medians, and **View daily readings** opens the individual dates. Tap the date range to look further back.
+
+Tap an activity tile to see energy that evening, the next morning or two mornings later. Tap a symptom bar to see the morning or evening ratings behind it. In Medications, choose a change or as-needed medicine and a diary measure to see them together. Open the dates below the graph for the full entry and follow-up mornings.
+
+The signed in-place update preserved the synthetic diary’s 26 days, 49 check-ins, 14 activities, two medication courses, two regimens, three doses and preferences. [Emulator screenshots](verification/1.10/patterns-overview.png) · [Activity comparisons at 200% text](verification/1.10/activities-large.png)
 
 ## Release 1.9
 

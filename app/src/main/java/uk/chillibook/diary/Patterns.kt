@@ -2,13 +2,11 @@ package uk.chillibook.diary
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
@@ -20,7 +18,6 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
@@ -38,7 +35,6 @@ import java.time.temporal.ChronoUnit
 private val shortDate = DateTimeFormatter.ofPattern("d MMM")
 private val longDate = DateTimeFormatter.ofPattern("EEE d MMM yyyy")
 private val monthLabel = DateTimeFormatter.ofPattern("MMMM yyyy")
-private val periods = listOf(7, 28, 90, 0)
 
 @Composable
 internal fun PatternMenu(label: String, options: List<String>, choose: (Int) -> Unit, heading: Boolean = false) {
@@ -71,28 +67,17 @@ internal fun PatternMenu(label: String, options: List<String>, choose: (Int) -> 
 }
 
 @Composable
-fun PatternsScreen(diary: Diary, onDate: (String) -> Unit, onToday: () -> Unit, initialCourseId: String? = null) {
-    val index = remember(diary) { PatternIndex(diary) }
-    val today = LocalDate.now()
-    var period by rememberSaveable { mutableIntStateOf(28) }
+internal fun PatternExplorer(diary: Diary, index: PatternIndex, start: LocalDate, end: LocalDate, today: LocalDate,
+    activities: Boolean, onDate: (String) -> Unit, onToday: () -> Unit, back: () -> Unit) {
     var factor by rememberSaveable { mutableStateOf(Factor.Work) }
     var outcome by rememberSaveable { mutableStateOf(FollowUp.Next) }
-    var metric by rememberSaveable { mutableStateOf<String?>(null) }
+    var metric by rememberSaveable { mutableStateOf<String?>("Brain fog") }
     val symptoms = remember(diary.checks) { (symptomLabels + diary.checks.flatMap { it.symptoms.keys }.distinct().sorted()).distinct() }
     val symptom = metric?.takeIf { it in symptoms }
     val levels = if (symptom == null) energyLabels else severityLabels
     var details by rememberSaveable { mutableStateOf<String?>(null) }
     var selectedMonth by rememberSaveable { mutableStateOf<String?>(null) }
     var lookup by rememberSaveable { mutableStateOf<String?>(null) }
-    val context = LocalContext.current
-    var selectedEnd by rememberSaveable { mutableStateOf<String?>(null) }
-    val end = if (period == 0) today else selectedEnd?.let(LocalDate::parse) ?: today
-    var medicationView by rememberSaveable { mutableStateOf(initialCourseId != null) }
-    if (medicationView && diary.courses.isNotEmpty()) {
-        MedicationPatterns(diary, index, today, initialCourseId, onDate) { medicationView = false }
-        return
-    }
-    val start = if (period == 0) minOf(end, index.first ?: end) else end.minusDays(period.toLong() - 1)
     val longRange = ChronoUnit.DAYS.between(start, end) >= 62
     val month = selectedMonth?.let(YearMonth::parse)
     val displayStart = month?.let { maxOf(start, it.atDay(1)) } ?: start
@@ -115,109 +100,80 @@ fun PatternsScreen(diary: Diary, onDate: (String) -> Unit, onToday: () -> Unit, 
     val largeType = LocalDensity.current.fontScale > 1.35f
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp),
         verticalArrangement = Arrangement.spacedBy(if (largeType) 10.dp else 8.dp)) {
-        TitleArt("Patterns", "patterns")
-        if (diary.courses.isNotEmpty()) {
-            FilledTonalButton(onClick = { medicationView = true }) { Text("Medication patterns") }
-        }
-        val rangeFormat = if (displayStart.year == displayEnd.year) shortDate else DateTimeFormatter.ofPattern("d MMM yyyy")
-        val rangeLabel = "${displayStart.format(rangeFormat)} – ${displayEnd.format(rangeFormat)}"
-        if (period == 0 || month != null) {
-            Text(rangeLabel, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Spacer(Modifier.height(8.dp))
+        OutlinedButton(onClick = back) { Text("‹  Patterns") }
+        Text("${start.format(longDate)} – ${end.format(longDate)}", style = MaterialTheme.typography.bodySmall)
+        if (activities) {
+            ActivityFrequencyGrid(index, displayStart, displayEnd, onDate)
         } else {
-            OutlinedButton(onClick = {
-                chooseDiaryDate(context, end.toString()) { selectedEnd = it; selectedMonth = null }
-            }, modifier = Modifier.heightIn(min = 48.dp)) {
-                Text("$rangeLabel   ⌄", color = MaterialTheme.colorScheme.onSurfaceVariant)
+            val showDaily = !longRange || ChronoUnit.DAYS.between(start, end) == 89L || month != null
+            Text("Symptom ratings", style = MaterialTheme.typography.headlineSmall, fontFamily = FontFamily.Serif)
+            PatternMenu(symptom ?: "Energy", metrics, { metric = if (it == 0) null else metrics[it] })
+            if (symptom != null) SymptomFrequency(index, displayStart, displayEnd, symptom, onDate)
+            if (showDaily) {
+                if (month != null) OutlinedButton(onClick = { selectedMonth = null }) { Text("‹ Months   ·   ${month.format(monthLabel)}") }
+                Timeline(index, displayStart, displayEnd, symptom, levels, factor, onToday)
+                OutlinedButton(onClick = { details = "timeline" }) { Text("Timeline as text") }
             }
-        }
-        val chunk = if (largeType) 2 else 4
-        periods.chunked(chunk).forEach { group ->
-            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                group.forEach { value ->
-                    val selected = period == value
-                    Surface(shape = RoundedCornerShape(12.dp), modifier = Modifier.weight(1f)
-                        .selectable(selected, role = Role.RadioButton) { period = value; selectedMonth = null }
-                        .border(1.dp, if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline, RoundedCornerShape(12.dp)),
-                        color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surface) {
-                        Box(Modifier.heightIn(min = 48.dp).padding(horizontal = 2.dp), contentAlignment = Alignment.Center) {
-                            Text(if (value == 0) "All time" else "$value days", fontSize = 14.sp)
-                        }
+            if (longRange && month == null) {
+                val months = remember(index, start, end, symptom) { index.monthly(start, end, symptom, levels.size) }
+                if (ChronoUnit.DAYS.between(start, end) == 89L) {
+                    val options = months.keys.reversed()
+                    PatternMenu("Explore a month", options.map { it.format(monthLabel) }, { selectedMonth = options[it].toString() })
+                } else {
+                    Text("Monthly distributions", style = MaterialTheme.typography.titleMedium)
+                    if (months.values.none { slots -> slots.values.any { it.recorded > 0 } }) {
+                        Text("No ${symptom?.lowercase() ?: "energy"} entries in this period.")
+                        OutlinedButton(onClick = onToday) { Text("Go to Today") }
                     }
-                }
-            }
-        }
-        val showDaily = !longRange || period == 90 || month != null
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-            Box(Modifier.weight(1f)) {
-                PatternMenu(symptom ?: "Energy", metrics, { metric = if (it == 0) null else metrics[it] }, true)
-            }
-            if (showDaily && !largeType) OutlinedButton(onClick = { details = "timeline" }) { Text("Timeline as text") }
-        }
-        if (showDaily) {
-            if (month != null) OutlinedButton(onClick = { selectedMonth = null }) { Text("‹ Months   ·   ${month.format(monthLabel)}") }
-            Timeline(index, displayStart, displayEnd, symptom, levels, factor, onToday)
-            if (largeType) OutlinedButton(onClick = { details = "timeline" }) { Text("Timeline as text") }
-        }
-        if (longRange && month == null) {
-            val months = remember(index, start, end, symptom) { index.monthly(start, end, symptom, levels.size) }
-            if (period == 90) {
-                val options = months.keys.reversed()
-                PatternMenu("Explore a month", options.map { it.format(monthLabel) }, { selectedMonth = options[it].toString() })
-            } else {
-                Text("Monthly distributions", style = MaterialTheme.typography.titleMedium)
-                if (months.values.none { slots -> slots.values.any { it.recorded > 0 } }) {
-                    Text("No ${symptom?.lowercase() ?: "energy"} entries in this period.")
-                    OutlinedButton(onClick = onToday) { Text("Go to Today") }
-                }
-                Text("Levels from ${levels.first().lowercase()} to ${levels.last().lowercase()}", style = MaterialTheme.typography.bodySmall)
-                months.entries.toList().asReversed().forEach { (key, slots) ->
-                    Column(Modifier.fillMaxWidth().clickable(role = Role.Button) { selectedMonth = key.toString() }
-                        .padding(vertical = 8.dp)) {
-                        Text("${key.format(monthLabel)}   ›", style = MaterialTheme.typography.titleMedium)
-                        val peak = slots.values.maxOf { it.counts.maxOrNull() ?: 0 }.coerceAtLeast(1)
-                        slots.forEach { (slot, ratings) ->
-                            val am = slot == "am"
-                            val color = if (am) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.tertiary
-                            Text("${if (am) "● Morning" else "◆ Evening"} · ${ratings.recorded} recorded", color = color)
-                            val summary = levels.mapIndexed { i, label -> "$label ${ratings.counts[i]}" }.joinToString(" · ")
-                            Canvas(Modifier.fillMaxWidth().height(28.dp).semantics { contentDescription = summary }) {
-                                val step = size.width / levels.size
-                                ratings.counts.forEachIndexed { i, count ->
-                                    val height = size.height * count / peak
-                                    drawRect(color, Offset(step * (i + .1f), size.height - height), Size(step * .8f, height))
+                    Text("Levels from ${levels.first().lowercase()} to ${levels.last().lowercase()}", style = MaterialTheme.typography.bodySmall)
+                    months.entries.toList().asReversed().forEach { (key, slots) ->
+                        Column(Modifier.fillMaxWidth().clickable(role = Role.Button) { selectedMonth = key.toString() }
+                            .padding(vertical = 8.dp)) {
+                            Text("${key.format(monthLabel)}   ›", style = MaterialTheme.typography.titleMedium)
+                            val peak = slots.values.maxOf { it.counts.maxOrNull() ?: 0 }.coerceAtLeast(1)
+                            slots.forEach { (slot, ratings) ->
+                                val am = slot == "am"
+                                val color = if (am) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.tertiary
+                                Text("${if (am) "● Morning" else "◆ Evening"} · ${ratings.recorded} recorded", color = color)
+                                val summary = levels.mapIndexed { i, label -> "$label ${ratings.counts[i]}" }.joinToString(" · ")
+                                Canvas(Modifier.fillMaxWidth().height(28.dp).semantics { contentDescription = summary }) {
+                                    val step = size.width / levels.size
+                                    ratings.counts.forEachIndexed { i, count ->
+                                        val height = size.height * count / peak
+                                        drawRect(color, Offset(step * (i + .1f), size.height - height), Size(step * .8f, height))
+                                    }
                                 }
+                                Text(summary, style = MaterialTheme.typography.bodySmall)
+                                if (ratings.unrated > 0) Text("Severity not rated · ${ratings.unrated}", style = MaterialTheme.typography.bodySmall)
                             }
-                            Text(summary, style = MaterialTheme.typography.bodySmall)
-                            if (ratings.unrated > 0) Text("Severity not rated · ${ratings.unrated}", style = MaterialTheme.typography.bodySmall)
                         }
+                        HorizontalDivider()
                     }
-                    HorizontalDivider()
                 }
             }
         }
-        HorizontalDivider()
-        val factors = listOf("After work days", "After socialising", "After household tasks")
-        PatternMenu(factors[factor.ordinal], factors, { factor = Factor.values()[it] }, true)
-        PatternMenu(outcome.label, FollowUp.values().map { it.label }, { outcome = FollowUp.values()[it] })
-        Text(if (outcome == FollowUp.Wellbeing) "Rough or very rough wellbeing" else "Low or very low energy")
-        GroupBar(factor.label, result.yes, MaterialTheme.colorScheme.primary)
-        GroupBar("No ${factor.label.lowercase()}", result.no, MaterialTheme.colorScheme.tertiary)
-        if (sparse) Text("A few entries so far", style = MaterialTheme.typography.titleSmall)
-        OutlinedButton(onClick = { details = "comparison" }) { Text("All levels and dates   ›") }
-        if (sparse) {
-            (result.yes.dates.map { factor.label to it } + result.no.dates.map { "No ${factor.label.lowercase()}" to it })
-                .sortedByDescending { it.second.anchor }.take(4).forEach { (group, pair) ->
-                    PairRow(group, pair, comparisonLevels, onDate)
-                }
+        if (activities) {
+            HorizontalDivider()
+            val factors = listOf("After work days", "After socialising", "After household tasks")
+            PatternMenu(factors[factor.ordinal], factors, { factor = Factor.values()[it] }, true)
+            PatternMenu(outcome.label, FollowUp.values().map { it.label }, { outcome = FollowUp.values()[it] })
+            Text(if (outcome == FollowUp.Wellbeing) "Rough or very rough wellbeing" else "Low or very low energy")
+            GroupBar(factor.label, result.yes, MaterialTheme.colorScheme.primary)
+            GroupBar("No ${factor.label.lowercase()}", result.no, MaterialTheme.colorScheme.tertiary)
+            if (sparse) Text("A few entries so far", style = MaterialTheme.typography.titleSmall)
+            OutlinedButton(onClick = { details = "comparison" }) { Text("All levels and dates   ›") }
+            if (sparse) {
+                (result.yes.dates.map { factor.label to it } + result.no.dates.map { "No ${factor.label.lowercase()}" to it })
+                    .sortedByDescending { it.second.anchor }.take(4).forEach { (group, pair) ->
+                        PairRow(group, pair, comparisonLevels, onDate)
+                    }
+            }
+            Text("Unknown ${factor.label.lowercase()} status on ${result.unknown} days.",
+                style = MaterialTheme.typography.bodySmall)
+            Text(if (outcome.lag == 0L) "These answers describe the same day. Their order is unknown."
+                else "Starting energy, overlapping activities and gaps can affect these observations.",
+                style = MaterialTheme.typography.bodySmall)
         }
-        Text("Unknown ${factor.label.lowercase()} status on ${result.unknown} days.",
-            style = MaterialTheme.typography.bodySmall)
-        Text(if (outcome.lag == 0L) "These answers describe the same day. Their order is unknown."
-            else "Starting energy, overlapping activities and gaps can affect these observations.",
-            style = MaterialTheme.typography.bodySmall)
-        ActivityFrequencyGrid(index, displayStart, displayEnd, onDate)
-        SymptomFrequency(index, displayStart, displayEnd, symptoms, onDate)
         if (lookupOptions.isNotEmpty()) {
             HorizontalDivider()
             PatternMenu(lookup?.takeIf { it in lookupOptions } ?: "Look up an activity or symptom", lookupOptions, { lookup = lookupOptions[it]; details = "lookup" })
@@ -288,18 +244,13 @@ fun PatternsScreen(diary: Diary, onDate: (String) -> Unit, onToday: () -> Unit, 
 
 @Composable
 private fun SymptomFrequency(index: PatternIndex, start: LocalDate, end: LocalDate,
-                             symptoms: List<String>, onDate: (String) -> Unit) {
-    var pickedSymptom by rememberSaveable { mutableStateOf(symptoms.first()) }
-    val symptom = pickedSymptom.takeIf { it in symptoms } ?: symptoms.first()
+                             symptom: String, onDate: (String) -> Unit) {
     val morning = remember(index, start, end, symptom) { index.symptomDates(start, end, symptom, "am") }
     val evening = remember(index, start, end, symptom) { index.symptomDates(start, end, symptom, "pm") }
     val days = ChronoUnit.DAYS.between(start, end).toInt() + 1
     var showDates by rememberSaveable { mutableStateOf(false) }
     val primary = MaterialTheme.colorScheme.primary
     val secondary = MaterialTheme.colorScheme.tertiary
-    Spacer(Modifier.height(12.dp))
-    Text("Symptom ratings", style = MaterialTheme.typography.headlineSmall, fontFamily = FontFamily.Serif)
-    PatternMenu(symptom, symptoms, { pickedSymptom = symptoms[it] })
     for (level in severityLabels.indices.toList() + listOf(UNRATED_SYMPTOM, null)) {
         Text(symptomRatingLabel(level), style = MaterialTheme.typography.titleSmall,
             modifier = Modifier.padding(top = 8.dp))

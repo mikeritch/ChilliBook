@@ -15,8 +15,8 @@ android {
         applicationId = "uk.chillibook.diary"
         minSdk = 26
         targetSdk = 36
-        versionCode = providers.gradleProperty("diaryVersionCode").orNull?.toInt() ?: 15
-        versionName = providers.gradleProperty("diaryVersionName").orNull ?: "1.9"
+        versionCode = providers.gradleProperty("diaryVersionCode").orNull?.toInt() ?: 16
+        versionName = providers.gradleProperty("diaryVersionName").orNull ?: "1.10"
         buildConfigField("String", "UPDATE_REPOSITORY", "\"mikeritch/ChilliBook\"")
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }

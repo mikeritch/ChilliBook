@@ -32,6 +32,10 @@ class PatternsFlowTest {
     )
 
     private fun tap(text: String) = compose.onNodeWithText(text).performScrollTo().performClick()
+    private fun period(current: String, next: String) {
+        tap(current)
+        compose.onNodeWithText(next).performClick()
+    }
     private val dialog = hasAnyAncestor(isDialog())
     private fun inDialog(text: String, substring: Boolean = false) =
         compose.onNode(dialog and hasText(text, substring = substring))
@@ -52,6 +56,13 @@ class PatternsFlowTest {
                     Surface { PatternsScreen(data, onDate = { opened = it }, onToday = {}) }
                 } }
             }
+            period("7 days", "28 days")
+            compose.onNodeWithContentDescription("Cooking, Second morning, 1 low out of 1 recorded readings. Open dates")
+                .performScrollTo().performClick()
+            inDialog("${cooking.plusDays(2).format(longDate)} · Morning · Low").performClick()
+            compose.runOnIdle { assertEquals(cooking.toString(), opened) }
+            inDialog("Close").performClick()
+            tap("Explore activity frequency")
             compose.onNodeWithContentDescription("Cooking, $week, 1 recorded day").performScrollTo().performClick()
             val entry = compose.onNodeWithContentDescription("Open diary entry for $cooking")
             entry.assert(hasText("Fairly well") and hasText("No entry") and hasText("Low"))
@@ -59,7 +70,14 @@ class PatternsFlowTest {
                 hasText("Two mornings later · ${cooking.plusDays(2).format(shortDate)}"))
             entry.performScrollTo().performClick()
             compose.runOnIdle { assertEquals(cooking.toString(), opened) }
-            tap("7 days")
+            tap("‹  Patterns")
+            period("28 days", "7 days")
+            compose.onNodeWithContentDescription("Brain fog, Morning, 0 moderate or strong out of 1 rated. Open dates")
+                .performScrollTo().performClick()
+            compose.onNode(dialog and hasText(gap.format(longDate)) and hasText("None")).performClick()
+            compose.runOnIdle { assertEquals(gap.toString(), opened) }
+            inDialog("Close").performClick()
+            tap("Explore symptom ratings")
             compose.onNodeWithText("Morning · 1 of 7 days").performScrollTo().assertIsDisplayed()
             compose.onNodeWithText("Morning · 6 of 7 days").assertExists()
             tap("Symptom rating dates   ›")
@@ -79,11 +97,17 @@ class PatternsFlowTest {
                     Surface { PatternsScreen(data, onDate = {}, onToday = {}) }
                 } }
             }
-            tap("Energy")
+            tap("Explore symptom ratings")
+            tap("Brain fog")
             compose.onNode(dialog and hasScrollAction()).performScrollToNode(hasText(historical))
             inDialog(historical).performClick()
             compose.onNodeWithText("No historical symptom entries in this period.").assertExists()
-            tap("All time")
+            tap("‹  Patterns")
+            period("7 days", "All time")
+            tap("Explore symptom ratings")
+            tap("Brain fog")
+            compose.onNode(dialog and hasScrollAction()).performScrollToNode(hasText(historical))
+            inDialog(historical).performClick()
             val month = YearMonth.from(older).format(monthLabel)
             compose.onNodeWithContentDescription("None 0 · Mild 0 · Moderate 0 · Strong 1", useUnmergedTree = true).assertExists()
             tap("$month   ›")
@@ -91,6 +115,29 @@ class PatternsFlowTest {
             compose.onNode(dialog and hasScrollAction()).performScrollToNode(hasText(older.format(longDate)))
             compose.onNode(dialog and hasText(older.format(longDate)) and hasText("Evening · Strong", substring = true))
                 .assertExists()
+        }
+    }
+
+    @Test fun asNeededOverviewUsesSelectedMeasureAndFiltersDoseDates() {
+        val course = MedicationCourse(name = "Synthetic medicine")
+        val regimen = MedicationRegimen(courseId = course.id, schedule = "As needed")
+        val dose = MedicationDose(courseId = course.id, regimenId = regimen.id, date = anchor.toString(),
+            slot = "pm", status = "Taken", asNeeded = true, reason = "Recorded reason")
+        val data = fixture.copy(courses = listOf(course), regimens = listOf(regimen),
+            doses = listOf(dose, dose.copy(id = "older", date = today.minusDays(10).toString())))
+        ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+            scenario.onActivity { activity ->
+                activity.setContent { DiaryTheme(false) {
+                    Surface { PatternsScreen(data, onDate = {}, onToday = {}) }
+                } }
+            }
+            tap("Evening energy")
+            compose.onNodeWithText("Morning energy").performClick()
+            compose.onNodeWithContentDescription("Morning energy, 1 rated dates.", substring = true).assertExists()
+            tap("See recorded dose days")
+            compose.onNodeWithText("You recorded why you took it that day.").assertExists()
+            compose.onNodeWithTag("medication-dose-day-$anchor").assert(hasText("1 dose · Recorded reason"))
+            compose.onNodeWithTag("medication-dose-day-${today.minusDays(10)}").assertDoesNotExist()
         }
     }
 
@@ -102,6 +149,7 @@ class PatternsFlowTest {
                     Surface { PatternsScreen(fixture, onDate = { opened = it }, onToday = {}) }
                 } }
             }
+            tap("Explore activity frequency")
             compose.onNodeWithContentDescription("Work, 0 of 0, 1 missing").assertExists()
             tap("Next morning’s energy")
             compose.onNodeWithText("Two mornings later").performClick()
@@ -116,11 +164,19 @@ class PatternsFlowTest {
             inDialog("Call").performClick()
             inDialog("Next morning · No entry\nTwo mornings later · Low\nWorthwhile · Yes", true).assertExists()
             inDialog("Close").performClick()
+            tap("‹  Patterns")
+            tap("Explore symptom ratings")
+            tap("Brain fog")
+            inDialog("Energy").performClick()
             tap("Timeline as text")
             val gapRow = dialog and hasText(gap.format(longDate)) and hasText("Morning · No entry\nEvening · No entry", substring = true)
             compose.onNode(gapRow).assertExists()
             inDialog("Close").performClick()
-            tap("90 days")
+            tap("‹  Patterns")
+            period("7 days", "90 days")
+            tap("Explore symptom ratings")
+            tap("Brain fog")
+            inDialog("Energy").performClick()
             val month = YearMonth.from(today).format(monthLabel)
             compose.onNodeWithContentDescription("Energy timeline", substring = true).assertExists()
             tap("Explore a month")

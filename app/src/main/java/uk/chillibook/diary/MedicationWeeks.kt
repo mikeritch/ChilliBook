@@ -68,8 +68,8 @@ internal fun medicationWeekStory(before: List<MedicationReading>, after: List<Me
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 internal fun MedicationWeeks(diary: Diary, index: PatternIndex, event: MedicationChange, today: LocalDate,
-    symptom: String, onSymptom: (String) -> Unit, openDate: (LocalDate) -> Unit) {
-    var measure by rememberSaveable { mutableStateOf(MedicationMeasure.Evening) }
+    symptom: String, onSymptom: (String) -> Unit, openDate: (LocalDate) -> Unit, initialMeasure: MedicationMeasure? = null) {
+    var measure by rememberSaveable(initialMeasure) { mutableStateOf(initialMeasure ?: MedicationMeasure.Evening) }
     val names = remember(diary.checks) { (symptomLabels + diary.checks.flatMap { it.symptoms.keys }.sorted()).distinct() }
     val subject = measure.subject(symptom)
     val start = event.laterWeekStart
