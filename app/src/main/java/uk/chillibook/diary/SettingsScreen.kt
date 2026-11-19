@@ -151,7 +151,7 @@ fun SettingsScreen(
                         1 -> dates.first()
                         else -> "${dates.first()} to ${dates.last()}"
                     })
-                    Text("${imported.days.size} day records\n${imported.checks.size} check-ins\n${imported.activities.size} activity entries")
+                    Text("${imported.days.size} day records\n${imported.checks.size} check-ins\n${imported.activities.size} activity entries\n${imported.courses.size} medication courses\n${imported.doses.size} dose records")
                     Text("Restoring this backup replaces all entries and settings on this device.")
                 }
             }, confirmButton = {

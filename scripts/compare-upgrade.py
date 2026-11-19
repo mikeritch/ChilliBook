@@ -7,11 +7,11 @@ from pathlib import Path
 def normalized(path, *, candidate=False):
     with path.open(encoding="utf-8") as stream:
         data = json.load(stream)
-    if data.get("format") != "ChilliBook" or data["version"] not in (1, 2, 3, 4, 5, 6):
+    if data.get("format") != "ChilliBook" or data["version"] not in (1, 2, 3, 4, 5, 6, 7):
         raise ValueError("Unsupported rehearsal export")
     version = data["version"]
-    if candidate and version != 6:
-        raise ValueError("Expected a format 6 export from the updated app")
+    if candidate and version != 7:
+        raise ValueError("Expected a format 7 export from the updated app")
     if version < 3:
         del data["episodes"]
         for day in data["days"]:
@@ -41,9 +41,13 @@ def normalized(path, *, candidate=False):
         for activity in data["activities"]:
             for field in ("restKind", "restPeriod", "restEnergy"):
                 activity[field] = None
-    data["version"] = 6
+    if version < 7:
+        for table in ("courses", "regimens", "doses"):
+            data[table] = []
+    data["version"] = 7
     for table, keys in {"days": ("date",), "checks": ("date", "slot"),
-                        "activities": ("id",)}.items():
+                        "activities": ("id",), "courses": ("id",),
+                        "regimens": ("id",), "doses": ("id",)}.items():
         rows = data[table]
         for row in rows:
             for key in ("tags", "demands", "context"):

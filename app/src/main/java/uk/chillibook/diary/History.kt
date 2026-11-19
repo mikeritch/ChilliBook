@@ -50,7 +50,7 @@ internal fun historyMatches(diary: Diary, query: String): List<HistoryMatch> {
 }
 
 @Composable
-fun HistoryScreen(diary: Diary, open: (String) -> Unit) {
+fun HistoryScreen(diary: Diary, manageMedication: () -> Unit, open: (String) -> Unit) {
     val today = LocalDate.now()
     var monthKey by rememberSaveable { mutableStateOf(YearMonth.from(today).toString()) }
     val month = YearMonth.parse(monthKey)
@@ -65,6 +65,7 @@ fun HistoryScreen(diary: Diary, open: (String) -> Unit) {
     LazyColumn(state=if (query.isBlank()) list else searchList, modifier=Modifier.fillMaxSize(), contentPadding=PaddingValues(horizontal=20.dp)) {
         item {
             TitleArt("History","history")
+            OutlinedButton(onClick = manageMedication) { Text("Medication history") }
             Text("Find a symptom or activity", style=MaterialTheme.typography.bodyMedium)
             OutlinedTextField(value=query, onValueChange={ query=it }, singleLine=true,
                 modifier=Modifier.fillMaxWidth().semantics { contentDescription = "Find a symptom or activity" },
@@ -111,6 +112,7 @@ private fun HistoryRow(diary: Diary,date: LocalDate, open: () -> Unit) {
     val checks = diary.checks.filter { it.date == key }
     val day = diary.days.find { it.date == key }
     val activities = diary.activities.filter { it.date == key }
+    val medicineNames = diary.doses.filter { it.date == key }.mapNotNull { dose -> diary.courses.find { it.id == dose.courseId }?.name }.distinct()
     val categories = categoryTags.keys.filter { activityFlag(day,activities,it) == true }
     val colors = MaterialTheme.colorScheme
     Row(Modifier.fillMaxWidth().clickable(role=Role.Button,onClick=open).heightIn(min=80.dp)
@@ -120,7 +122,7 @@ private fun HistoryRow(diary: Diary,date: LocalDate, open: () -> Unit) {
             Text(date.dayOfMonth.toString(),fontSize=25.sp,fontFamily=FontFamily.Serif)
         }
         Column(Modifier.weight(1f),verticalArrangement=Arrangement.spacedBy(5.dp)) {
-            if (checks.isEmpty() && day == null && activities.isEmpty()) Text("No entry",color=colors.onSurfaceVariant)
+            if (checks.isEmpty() && day == null && activities.isEmpty() && medicineNames.isEmpty()) Text("No entry",color=colors.onSurfaceVariant)
             else {
                 @Composable fun SlotLabel(slot:String) {
                     val level = checks.find { it.slot == slot }?.energy?.let(energyLabels::get) ?: "—"
@@ -135,7 +137,7 @@ private fun HistoryRow(diary: Diary,date: LocalDate, open: () -> Unit) {
                 else Row(Modifier.fillMaxWidth()) {
                     Box(Modifier.weight(1f)) { SlotLabel("am") }; Box(Modifier.weight(1f)) { SlotLabel("pm") }
                 }
-                val labels = (categories + activities.flatMap { it.tags } +
+                val labels = (medicineNames + categories + activities.flatMap { it.tags } +
                     listOfNotNull("No rests or naps".takeIf { restRecorded(day, activities) == false })).distinct()
                 if (labels.isNotEmpty()) Row(verticalAlignment=Alignment.CenterVertically) {
                     val icon = when(categories.firstOrNull()) { "Work" -> R.drawable.work_bag; "Socialising" -> R.drawable.cups; "Household" -> R.drawable.house; else -> R.drawable.symbook }
@@ -160,7 +162,7 @@ fun DateDetail(diary: Diary,date: String,edit:(String)->Unit) {
         verticalArrangement=Arrangement.spacedBy(8.dp)) {
         Text(local.label("EEEE"),fontFamily=FontFamily.Serif,fontSize=38.sp,lineHeight=44.sp)
         Text(local.label("d MMMM yyyy"),color=MaterialTheme.colorScheme.onSurfaceVariant)
-        if (checks.isEmpty() && day == null && activities.isEmpty()) Text("No entry")
+        if (checks.isEmpty() && day == null && activities.isEmpty() && diary.doses.none { it.date == date }) Text("No entry")
         for ((slot, label) in listOf("am" to "Morning","pm" to "Evening")) {
             Spacer(Modifier.height(8.dp))
             Row(verticalAlignment=Alignment.CenterVertically) {
@@ -168,6 +170,16 @@ fun DateDetail(diary: Diary,date: String,edit:(String)->Unit) {
                     Modifier.padding(end=8.dp).size(28.dp), tint=androidx.compose.ui.graphics.Color.Unspecified)
                 Text(label,Modifier.weight(1f),fontSize=22.sp,fontFamily=FontFamily.Serif)
                 TextButton(onClick={edit(slot)}) { Text("Edit " + label.lowercase()) }
+            }
+            diary.courses.forEach { course ->
+                val actual = diary.doses.filter { it.courseId == course.id && it.date == date && it.slot == slot }
+                val plan = diary.scheduledRegimen(course, date)
+                if (plan != null && plan.dueIn(slot) && plan.schedule != "As needed" && actual.none { !it.asNeeded }) {
+                    Text(listOf(course.name, medicationAmount(plan.strength, plan.amount, plan.unit), "Unlogged").filter { it.isNotBlank() }.joinToString(" · "))
+                }
+                actual.forEach { dose ->
+                    Text(listOfNotNull(course.name, dose.status, dose.schedule, medicationAmount(dose.strength, dose.amount, dose.unit).ifBlank { null }, dose.time, dose.reason).joinToString(" · "))
+                }
             }
             val check = checks.find { it.slot == slot }
             Text("Energy · " + (check?.energy?.let(energyLabels::get) ?: "No entry"))

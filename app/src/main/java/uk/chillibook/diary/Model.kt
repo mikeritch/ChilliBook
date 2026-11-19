@@ -50,7 +50,10 @@ data class Prefs(@PrimaryKey val id: Int = 1, val theme: String = "system",
 
 data class Diary(val days: List<Day> = emptyList(), val checks: List<Check> = emptyList(),
     val activities: List<ActivityEntry> = emptyList(),
-    val prefs: Prefs = Prefs())
+    val prefs: Prefs = Prefs(),
+    val courses: List<MedicationCourse> = emptyList(),
+    val regimens: List<MedicationRegimen> = emptyList(),
+    val doses: List<MedicationDose> = emptyList())
 
 val energyLabels = listOf("Very low","Low","Medium","Fairly high","High")
 val sleepLabels = listOf("Unrefreshed","A little","Mostly","Fully")
@@ -80,4 +83,4 @@ fun activityFlag(day: Day?, activities: List<ActivityEntry>, category: String): 
 }
 
 fun Diary.dates(): List<String> = (days.map { it.date } + checks.map { it.date } +
-    activities.map { it.date }).distinct().sorted()
+    activities.map { it.date } + doses.map { it.date }).distinct().sorted()

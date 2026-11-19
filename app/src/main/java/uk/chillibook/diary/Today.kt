@@ -21,7 +21,7 @@ import java.util.Locale
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TodayScreen(diary: Diary, date: String, slot: String, onDate: (String) -> Unit,
-                onSlot: (String) -> Unit, edit: ((Diary) -> Diary) -> Unit, status: String, retry: () -> Unit) {
+                onSlot: (String) -> Unit, edit: ((Diary) -> Diary) -> Unit, status: String, retry: () -> Unit, manageMedication: () -> Unit) {
     val morning = slot == "am"
     val day = diary.days.find { it.date == date }
     val check = diary.checks.find { it.date == date && it.slot == slot }
@@ -55,6 +55,10 @@ fun TodayScreen(diary: Diary, date: String, slot: String, onDate: (String) -> Un
                 AnswerGrid(question, wellbeingLabels, day?.wellbeing, 5) { level ->
                     edit { d -> d.changeDay(date) { answer -> answer.copy(wellbeing = level.takeUnless { it == answer.wellbeing }) } }
                 }
+            }
+            Spacer(Modifier.height(20.dp))
+            key(date, slot) { TodayMedication(diary, date, slot, edit, manageMedication) }
+            if (!morning) {
                 Spacer(Modifier.height(28.dp))
                 key(date) { EveningActivities(diary, date, edit) }
             }

@@ -93,7 +93,7 @@ object Backup {
     }
 
     fun encode(diary: Diary): String = obj(
-        "format" to "ChilliBook", "version" to 6,
+        "format" to "ChilliBook", "version" to 7,
         "days" to rows(diary.days) { d -> obj(
             "date" to d.date, "work" to d.work, "social" to d.social, "household" to d.household,
             "wellbeing" to d.wellbeing, "impact" to d.impact, "context" to set(d.context),
@@ -109,6 +109,21 @@ object Backup {
             "workLength" to a.workLength, "workPlace" to a.workPlace, "at" to a.at, "zone" to a.zone,
             "workSetup" to a.workSetup, "restKind" to a.restKind, "restPeriod" to a.restPeriod,
             "restEnergy" to a.restEnergy
+        ) },
+        "courses" to rows(diary.courses) { c -> obj(
+            "id" to c.id, "name" to c.name, "start" to c.start, "end" to c.end,
+            "ended" to c.ended, "at" to c.at, "zone" to c.zone
+        ) },
+        "regimens" to rows(diary.regimens) { r -> obj(
+            "id" to r.id, "courseId" to r.courseId, "effective" to r.effective,
+            "strength" to r.strength, "amount" to r.amount, "unit" to r.unit,
+            "schedule" to r.schedule, "at" to r.at, "zone" to r.zone
+        ) },
+        "doses" to rows(diary.doses) { d -> obj(
+            "id" to d.id, "courseId" to d.courseId, "regimenId" to d.regimenId,
+            "date" to d.date, "slot" to d.slot, "status" to d.status, "asNeeded" to d.asNeeded,
+            "strength" to d.strength, "amount" to d.amount, "unit" to d.unit, "schedule" to d.schedule,
+            "time" to d.time, "reason" to d.reason, "at" to d.at, "zone" to d.zone
         ) },
         "prefs" to obj("id" to diary.prefs.id, "theme" to diary.prefs.theme,
             "morningReminder" to diary.prefs.morningReminder, "eveningReminder" to diary.prefs.eveningReminder,
@@ -168,6 +183,10 @@ object Backup {
         return List(array.length()) { i -> array.getJSONObject(i).parse().also { require(seen.add(key(it))) } }
     }
 
+    private fun JSONObject.schedule() = text("schedule").also {
+        require(it == null || it in setOf("Morning", "Evening", "Morning and evening", "As needed"))
+    }
+
     fun decode(text: String): Diary = decode(StringReader(text))
 
     fun decode(source: Reader): Diary {
@@ -177,7 +196,7 @@ object Backup {
             result
         }
         val version = root.get("version") as Int
-        require(root.string("format") == "ChilliBook" && version in 1..6)
+        require(root.string("format") == "ChilliBook" && version in 1..7)
         val days = root.records("days", Day::date) {
             Day(date("date"), bool("work"), bool("social"), bool("household"), level("wellbeing", 0..4),
                 text("impact"), strings("context"), instant(), zone(),
@@ -229,6 +248,35 @@ object Backup {
                 workPin = if (version >= 5) optional("workPin")?.let { decodeWorkSetup(it as JSONObject) } else null,
                 activityPins = if (version >= 5) decodeActivityPins(getJSONObject("activityPins")) else emptyMap())
         }
-        return Diary(days, checks, activities, prefs)
+        val diary = Diary(days, checks, activities, prefs)
+        if (version < 7) return diary
+        val courses = root.records("courses", MedicationCourse::id) {
+            val start = text("start")?.let(::checkedDate)
+            val end = text("end")?.let(::checkedDate)
+            val ended = get("ended") as Boolean
+            require(end == null || ended && (start == null || start <= end))
+            MedicationCourse(string("id"), string("name"), start, end, ended, instant(), zone())
+        }
+        val courseIds = courses.mapTo(mutableSetOf()) { it.id }
+        val regimens = root.records("regimens", MedicationRegimen::id) {
+            val courseId = string("courseId").also { require(it in courseIds) }
+            MedicationRegimen(string("id"), courseId, text("effective")?.let(::checkedDate),
+                text("strength"), text("amount"), text("unit"), schedule(), instant(), zone())
+        }
+        val regimenCourses = regimens.associate { it.id to it.courseId }
+        val scheduled = mutableSetOf<Triple<String, String, String>>()
+        val doses = root.records("doses", MedicationDose::id) {
+            val courseId = string("courseId")
+            val regimenId = string("regimenId").also { require(regimenCourses[it] == courseId) }
+            val date = date("date")
+            val slot = string("slot").also { require(it == "am" || it == "pm") }
+            val status = string("status").also { require(it == "Taken" || it == "Skipped") }
+            val asNeeded = get("asNeeded") as Boolean
+            if (!asNeeded) require(scheduled.add(Triple(courseId, date, slot)))
+            MedicationDose(string("id"), courseId, regimenId, date, slot, status, asNeeded,
+                text("strength"), text("amount"), text("unit"), schedule(), text("time")?.also { require(it.length == 5 && java.time.LocalTime.parse(it).toString() == it) }, text("reason"),
+                instant(), zone())
+        }
+        return diary.copy(courses = courses, regimens = regimens, doses = doses)
     }
 }

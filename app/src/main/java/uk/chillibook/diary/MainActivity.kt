@@ -101,6 +101,9 @@ class MainActivity : ComponentActivity() {
 @Composable
 private fun DiaryHome(vm: DiaryViewModel, localDay: String, target: ReminderTarget?, consume: () -> Unit) {
     var tab by rememberSaveable { mutableStateOf("Today") }
+    var medications by rememberSaveable { mutableStateOf(false) }
+    var medTarget by rememberSaveable { mutableStateOf<String?>(null) }
+    var patternVisit by rememberSaveable { mutableIntStateOf(0) }
     var settings by rememberSaveable { mutableStateOf(false) }
     var detail by rememberSaveable { mutableStateOf<String?>(null) }
     var editing by rememberSaveable { mutableStateOf(false) }
@@ -117,6 +120,8 @@ private fun DiaryHome(vm: DiaryViewModel, localDay: String, target: ReminderTarg
     var seenReset by rememberSaveable { mutableIntStateOf(vm.resetGeneration) }
     LaunchedEffect(vm.resetGeneration) {
         if (seenReset != vm.resetGeneration) {
+            medications = false
+            medTarget = null
             seenReset = vm.resetGeneration
             detail = null
             editing = false
@@ -130,6 +135,7 @@ private fun DiaryHome(vm: DiaryViewModel, localDay: String, target: ReminderTarg
             holder.removeState("Today-$todayVisit")
             todayVisit++
             settings = false
+            medications = false
             editing = false
             detail = null
             date = target.date
@@ -141,15 +147,16 @@ private fun DiaryHome(vm: DiaryViewModel, localDay: String, target: ReminderTarg
     val back = {
         when {
             settings -> settings = false
+            medications -> medications = false
             editing -> editing = false
             detail != null -> detail = null
             else -> tab = "Today"
         }
     }
-    BackHandler(settings || detail != null || tab != "Today", onBack = back)
+    BackHandler(settings || medications || detail != null || tab != "Today", onBack = back)
     val colors = MaterialTheme.colorScheme
     val checkInDate = when {
-        settings -> null
+        settings || medications -> null
         editing -> detail
         tab == "Today" && detail == null -> date
         else -> null
@@ -161,10 +168,11 @@ private fun DiaryHome(vm: DiaryViewModel, localDay: String, target: ReminderTarg
             Column(Modifier.safeDrawingPadding()) {
                 Row(Modifier.fillMaxWidth().padding(start = 20.dp,end = 10.dp).heightIn(min = 48.dp),
                     verticalAlignment = Alignment.CenterVertically) {
-                    if (settings || detail != null) TextButton(onClick = back) { Text("‹  Back") }
+                    if (settings || medications || detail != null) TextButton(onClick = back) { Text("‹  Back") }
                     DayThanksHeading(
                         title = when {
                             settings -> "Settings"
+                            medications -> "Medication history"
                             detail != null -> "Diary entry"
                             tab != "Today" -> "ChilliBook"
                             date == localDay -> "Today"
@@ -184,17 +192,31 @@ private fun DiaryHome(vm: DiaryViewModel, localDay: String, target: ReminderTarg
                             if (vm.status.startsWith("Couldn’t")) TextButton(onClick = vm::retry) { Text("Retry") }
                         }
                         settings -> SettingsScreen(diary, vm::edit, vm::restore, vm.status, vm::retry, back, vm::reset, vm.resetting)
+                        medications -> Column {
+                            Box(Modifier.weight(1f)) {
+                                MedicationManagement(diary, vm::edit) { course ->
+                                    holder.removeState("Patterns-$patternVisit")
+                                    patternVisit++
+                                    medTarget = course
+                                    editing = false
+                                    detail = null
+                                    medications = false
+                                    tab = "Patterns"
+                                }
+                            }
+                            SaveNotice(vm.status, vm::retry)
+                        }
                         detail != null && editing -> holder.SaveableStateProvider("edit-${detail}") {
-                            TodayScreen(diary,detail!!,editSlot,{detail=it},{editSlot=it},{ change -> vm.editCheckIn(detail, change) },vm.status,vm::retry)
+                            TodayScreen(diary,detail!!,editSlot,{detail=it},{editSlot=it},{ change -> vm.editCheckIn(detail, change) },vm.status,vm::retry) { medications = true }
                         }
                         detail != null -> holder.SaveableStateProvider("day-${detail}") {
                             DateDetail(diary, detail!!) { editSlot = it; editing = true }
                         }
-                        else -> holder.SaveableStateProvider(if (tab == "Today") "Today-$todayVisit" else tab) {
+                        else -> holder.SaveableStateProvider(if (tab == "Today") "Today-$todayVisit" else if (tab == "Patterns") "Patterns-$patternVisit" else tab) {
                             when (tab) {
-                                "Today" -> TodayScreen(diary,date,slot,{date=it},{slot=it},{ change -> vm.editCheckIn(date, change) },vm.status,vm::retry)
-                                "History" -> HistoryScreen(diary) { detail=it }
-                                else -> PatternsScreen(diary,{detail=it},{tab="Today"; date=LocalDate.now().toString()})
+                                "Today" -> TodayScreen(diary,date,slot,{date=it},{slot=it},{ change -> vm.editCheckIn(date, change) },vm.status,vm::retry) { medications = true }
+                                "History" -> HistoryScreen(diary, { medications = true }) { detail=it }
+                                else -> PatternsScreen(diary,{detail=it},{tab="Today"; date=LocalDate.now().toString()}, medTarget)
                             }
                         }
                     }
@@ -205,7 +227,7 @@ private fun DiaryHome(vm: DiaryViewModel, localDay: String, target: ReminderTarg
                     listOf("Today" to R.drawable.nav_today,"History" to R.drawable.nav_history,"Patterns" to R.drawable.nav_patterns)
                         .forEach { (name, icon) ->
                             NavigationBarItem(selected = tab == name && !settings, onClick = {
-                                settings = false; detail = null; editing = false; tab = name
+                                settings = false; medications = false; detail = null; editing = false; tab = name
                             }, icon = { Icon(painterResource(icon), null, Modifier.size(22.dp)) },
                             label = { Text(name) }, colors = NavigationBarItemDefaults.colors(
                                 selectedIconColor = colors.primary, selectedTextColor = colors.primary,

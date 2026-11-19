@@ -26,6 +26,7 @@ internal fun nextReminder(now: ZonedDateTime, minute: Int, lastDate: String?): Z
 }
 
 internal fun Diary.answeredReminder(date: String, slot: String): Boolean =
+    doses.any { it.date == date && it.slot == slot } ||
     checks.any { it.date == date && it.slot == slot && (it.energy != null || it.sleep != null || it.symptoms.isNotEmpty()) } ||
         (slot == "pm" && (activities.any { it.date == date } || days.any { it.date == date &&
             (it.work != null || it.social != null || it.household != null || it.wellbeing != null ||

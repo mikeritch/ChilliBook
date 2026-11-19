@@ -32,7 +32,7 @@ class StorageBackupTest {
         val check = morning.copy(symptoms = mapOf("Brain fog" to UNRATED_SYMPTOM, "Headache" to 0))
         val original = sample.copy(checks = listOf(check))
         val backup = JSONObject(Backup.encode(original))
-        assertEquals(6, backup.getInt("version"))
+        assertEquals(7, backup.getInt("version"))
         assertFalse(backup.getJSONObject("prefs").has("pins"))
         assertFalse(backup.has("episodes"))
         assertFalse(backup.getJSONArray("days").getJSONObject(0).has("workOff"))
@@ -173,6 +173,57 @@ class StorageBackupTest {
         }
     }
 
+    @Test fun regimenSnapshotsAndSeparateAsNeededDosesSurviveCorrectionAndRestore() = runBlocking {
+        val date = morning.date
+        val course = MedicationCourse("c", "Example", date, null, false, at, zone)
+        val past = MedicationCourse("p", "Past example", null, null, true, at, zone)
+        val old = MedicationRegimen("a", course.id, date, "10 mg", "1", "tablet", "Morning and evening", at, zone)
+        val changed = old.copy(id = "b", effective = "2026-11-16", amount = "2", schedule = "As needed")
+        val unknown = MedicationRegimen("u", past.id, null, null, null, null, null, at, zone)
+        val first = MedicationDose("1", course.id, old.id, date, "am", "Taken", false,
+            old.strength, old.amount, old.unit, old.schedule, null, null, at, zone)
+        val evening = first.copy(id = "2", slot = "pm", status = "Skipped")
+        val extra = first.copy(id = "3", regimenId = changed.id, date = "2026-11-16", asNeeded = true,
+            amount = "2", schedule = changed.schedule, time = "09:15", reason = "Recorded reason")
+        val original = sample.copy(courses = listOf(course, past), regimens = listOf(old, changed, unknown),
+            doses = listOf(first, evening, extra, extra.copy(id = "4", time = null, amount = null, reason = null)))
+        val corrected = original.copy(doses = listOf(first.copy(status = "Skipped")) + original.doses.drop(1))
+        Storage(context, databaseName).use { store ->
+            store.replace(original)
+            store.save(original, corrected)
+        }
+        Storage(context, databaseName).use { store ->
+            assertEquals(corrected, store.read())
+            val encoded = Backup.encode(store.read())
+            store.replace(Diary())
+            store.replace(Backup.decode(encoded))
+            assertEquals(corrected, store.read())
+            fun damaged(edit: JSONObject.() -> Unit) = JSONObject(encoded).apply(edit).toString()
+            val badExports = listOf(
+                damaged { getJSONArray("regimens").getJSONObject(0).put("courseId", "missing") },
+                damaged { getJSONArray("doses").getJSONObject(0).put("regimenId", unknown.id) },
+                damaged { getJSONArray("doses").getJSONObject(0).put("slot", "other") },
+                damaged { getJSONArray("doses").getJSONObject(0).put("status", "unknown") },
+                damaged { getJSONArray("doses").getJSONObject(0).put("regimenId", "missing") },
+                damaged { getJSONArray("regimens").getJSONObject(0).put("effective", "2026-02-30") },
+                damaged { getJSONArray("doses").apply { put(getJSONObject(0)) } },
+                damaged { getJSONArray("doses").getJSONObject(2).put("time", "25:90") },
+                damaged { remove("doses") }
+            )
+            for (bad in badExports) {
+                assertTrue(runCatching { store.replace(Backup.decode(bad)) }.isFailure)
+                assertEquals(corrected, store.read())
+            }
+            val previous = JSONObject(encoded).apply {
+                put("version", 6)
+                remove("courses")
+                remove("regimens")
+                remove("doses")
+            }
+            assertEquals(sample, Backup.decode(previous.toString()))
+        }
+    }
+
     @Test fun oversizedInputIsRejectedBeforeParsingOrReplacingTheDiary() {
         val large = " ".repeat(Backup.MAX_CHARACTERS + 1)
         val result = runCatching { Backup.decode(large) }
@@ -202,7 +253,7 @@ class StorageBackupTest {
             }
             val missingField = JSONObject(valid).apply { getJSONArray("days").getJSONObject(0).remove("work") }
             val wrongType = JSONObject(valid).apply { getJSONArray("checks").getJSONObject(0).put("energy", "2") }
-            val unsupported = JSONObject(valid).put("version", 7)
+            val unsupported = JSONObject(valid).put("version", 8)
             val badDate = JSONObject(valid).apply { getJSONArray("days").getJSONObject(0).put("date", "2026-02-30") }
             for (damaged in listOf(valid.dropLast(1), valid + "extra", duplicate.toString(), unsupported.toString(),
                 missingField.toString(), wrongType.toString(), badDate.toString())) {

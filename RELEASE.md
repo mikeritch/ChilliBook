@@ -7,7 +7,7 @@
 **Over USB.** Enable USB debugging and authorise the computer on the phone. Place the signed APK beside [Install ChilliBook.command](<release/Install ChilliBook.command>) and double-click the command on macOS. With Android SDK Platform-Tools on your path, you can also run the following from the project root.
 
 ```sh
-adb -d install -r release/ChilliBook-1.7.apk
+adb -d install -r release/ChilliBook-1.8.apk
 ```
 
 ## Back up or move the diary
@@ -26,12 +26,20 @@ Choose **Settings → Back up diary** and select a private destination. The JSON
 apk=app/build/outputs/apk/release/app-release.apk
 apksigner verify --print-certs "$apk"
 aapt dump badging "$apk" | head -1
-version=1.7  # set to the version you just built
+version=1.8  # set to the version you just built
 cp "$apk" "release/ChilliBook-$version.apk"
 git tag "v$version"
 git push origin HEAD "v$version"
 gh release create "v$version" "release/ChilliBook-$version.apk" --verify-tag --generate-notes --latest
 ```
+
+## Release 1.8
+
+Open **History → Medication history** to add a current or past medicine. A name is enough. Add a dated schedule to show dose choices in Today. Tap **Taken** or **Skipped** to record a scheduled dose, or tap the selected answer again to clear it. Each **Add as-needed dose** tap creates a separate record with optional time, amount and reason.
+
+Use **Record change** when a dose or schedule changes, **Record stop date** for the final day of a course, and **Restart medication** to begin a new course. **View in Patterns** opens the diary around a dated change, including energy the next two mornings. Room schema 7 adds the medication tables on update. Backup format 7 includes medication history and reads previous exports.
+
+The signed 1.7 → 1.8 update preserved 26 days, 49 check-ins, 14 activities and preferences field for field on an isolated Android emulator. The new medication tables started empty. Checks covered skipped-version migration, rollback and retry, backup round-tripping, and recording, correcting and clearing a medication-only check-in. The schedule change, stop and restart flows were exercised on-device. [Running screens](verification/1.8/running-screens.png) · [200% text](verification/1.8/medication-today-large.png)
 
 ## Release 1.7
 

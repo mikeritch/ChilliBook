@@ -73,6 +73,26 @@ class DiaryMigrationTest {
         Storage(context, file).use { assertEquals(updated, it.read()) }
     }
 
+    @Test fun populatedV6RetainsExplicitNoRestAndAcceptsMedicationOnlyEdit() = runBlocking {
+        val date = "2026-11-03"
+        val at = "2026-11-04T00:03:00Z"
+        val zone = "America/New_York"
+        createReleasedDatabase(6).use { db ->
+            db.execSQL("INSERT INTO days (date,work,noRests,context,at,zone) VALUES (?,0,1,'[]',?,?)",
+                arrayOf(date, at, zone))
+            db.execSQL("INSERT INTO prefs (id,theme,eveningReminder) VALUES (1,'dark',1200)")
+        }
+        val original = Diary(days = listOf(Day(date, work = false, noRests = true, at = at, zone = zone)),
+            prefs = Prefs(theme = "dark", eveningReminder = 1200))
+        val course = MedicationCourse("course", "Example", null, null, true, at, zone)
+        val updated = original.copy(courses = listOf(course))
+        Storage(context, file).use { store ->
+            assertEquals(original, store.read())
+            store.save(original, updated)
+        }
+        Storage(context, file).use { assertEquals(updated, it.read()) }
+    }
+
     private fun checkUpgrade(version: Int) = runBlocking {
         val at = "2026-11-18T16:02:12Z"
         val zone = "America/New_York"
@@ -106,6 +126,22 @@ class DiaryMigrationTest {
             it.save(original, updated)
         }
         Storage(context, file).use { assertEquals(updated, it.read()) }
+    }
+
+    @Test fun failedV6UpgradeRollsBackMedicationTablesAndCanRetry() = runBlocking {
+        createReleasedDatabase(6).use { db ->
+            db.execSQL("INSERT INTO prefs (id,theme) VALUES (1,'dark')")
+            db.execSQL("CREATE INDEX unexpected_idx ON checks(energy)")
+        }
+        Storage(context, file).use { assertTrue(runCatching { it.read() }.isFailure) }
+        context.openOrCreateDatabase(file, 0, null).use { db ->
+            assertEquals(6, db.version)
+            db.rawQuery("SELECT name FROM sqlite_master WHERE type='table' AND name LIKE 'medication_%'", null).use {
+                assertFalse(it.moveToFirst())
+            }
+            db.execSQL("DROP INDEX unexpected_idx")
+        }
+        Storage(context, file).use { assertEquals(Diary(prefs = Prefs(theme = "dark")), it.read()) }
     }
 
     @Test fun failedV2UpgradeRestoresRetiredFieldsAndCanRetry() = runBlocking {
