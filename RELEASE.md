@@ -7,7 +7,7 @@
 **Over USB.** Enable USB debugging and authorise the computer on the phone. Place the signed APK beside [Install ChilliBook.command](<release/Install ChilliBook.command>) and double-click the command on macOS. With Android SDK Platform-Tools on your path, you can also run the following from the project root.
 
 ```sh
-adb -d install -r release/ChilliBook-1.8.1.apk
+adb -d install -r release/ChilliBook-1.9.apk
 ```
 
 ## Back up or move the diary
@@ -26,12 +26,18 @@ Choose **Settings → Back up diary** and select a private destination. The JSON
 apk=app/build/outputs/apk/release/app-release.apk
 apksigner verify --print-certs "$apk"
 aapt dump badging "$apk" | head -1
-version=1.8.1  # set to the version you just built
+version=1.9  # set to the version you just built
 cp "$apk" "release/ChilliBook-$version.apk"
 git tag "v$version"
 git push origin HEAD "v$version"
 gh release create "v$version" "release/ChilliBook-$version.apk" --verify-tag --generate-notes --latest
 ```
+
+## Release 1.9
+
+Open **Patterns → Medication patterns** to see how morning energy, evening energy or a symptom differed around a medication change. **Switch** opens other changes and as-needed medicines. Tap a date to see the dose, activities, symptoms and energy on the next two calendar mornings. As-needed medicines open a list of the days you took them, including repeated doses and recorded reasons. The comparison uses the diary on your device. Room and backup formats remain at version 7.
+
+The signed 1.8.1 → 1.9 update preserved the entire synthetic diary, including a skipped dose and two as-needed doses on one date. On-device checks covered switching measures, opening a date, returning to the same comparison and opening an as-needed dose day at normal and 200% text size. [Comparison](verification/1.9/patterns.png) · [Dated follow-ups](verification/1.9/follow-up.png) · [Large text](verification/1.9/patterns-large.png)
 
 ## Version 1.8.1
 

@@ -58,7 +58,7 @@ class MedicationFlowTest {
             try {
                 val earlierChecks = (1L..14L).map { offset ->
                     Check(today.minusDays(offset).toString(), "pm", energy = if (offset in 7L..11L) 1 else 3)
-                }
+                } + Check(today.minusDays(6).toString(), "am", energy = 2)
                 runBlocking { store.replace(initial.copy(checks = earlierChecks, courses = listOf(scheduled, prn, past), regimens = listOf(regimen, asNeeded))) }
                 ActivityScenario.launch(MainActivity::class.java).use {
                     compose.waitUntil(15_000) { compose.onAllNodesWithContentDescription("Morning check-in").fetchSemanticsNodes().isNotEmpty() }
@@ -125,8 +125,36 @@ class MedicationFlowTest {
                     compose.onAllNodesWithText("Show details")[0].performScrollTo().performClick()
                     if (!large) picture("history")
                     tap("View in Patterns")
-                    compose.onNodeWithText("Week ending on the last day").performScrollTo().assertIsDisplayed()
-                    if (!large) picture("patterns")
+                    val courseTitle = compose.onNodeWithText("Past course")
+                    courseTitle.performScrollTo().assertIsDisplayed()
+                    compose.onNodeWithText("Evening energy by day").assertExists()
+                    picture(if (large) "patterns-large" else "patterns")
+
+                    tap("Brain fog")
+                    compose.onNodeWithText("Evening brain fog by day").assertExists()
+                    tap("Mornings")
+                    compose.onNodeWithText("Morning energy by day").assertExists()
+                    val chartDay = compose.onNodeWithTag("medication-day-${past.end}")
+                    chartDay.performScrollTo().performClick()
+                    val mornings = compose.onNodeWithText("The next two mornings")
+                    mornings.performScrollTo().assertIsDisplayed()
+                    if (!large) picture("follow-up")
+                    tap("Comparison")
+                    compose.onNodeWithText("Morning energy by day").assertExists()
+                    courseTitle.assertExists()
+                    chartDay.assertExists()
+
+                    tap("Switch")
+                    compose.onNodeWithText("As needed").performScrollTo().assertIsDisplayed()
+                    tap("Occasional tablet")
+                    val doseDay = compose.onNodeWithTag("medication-dose-day-$today")
+                    doseDay.assert(hasText("2 doses", substring = true)).performScrollTo().performClick()
+                    mornings.performScrollTo().assertIsDisplayed()
+                    compose.onAllNodesWithText("Still ahead").assertCountEquals(2)
+                    picture(if (large) "day-large" else "day")
+                    tap("Dose days")
+                    doseDay.performScrollTo().assertIsDisplayed()
+                    doseDay.assert(hasText("2 doses", substring = true))
                 }
             } finally {
                 runBlocking { store.replace(initial) }

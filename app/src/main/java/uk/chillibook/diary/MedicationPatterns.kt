@@ -1,10 +1,19 @@
 package uk.chillibook.diary
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.saveable.rememberSaveableStateHolder
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
@@ -39,171 +48,173 @@ internal fun medicationWeek(index: PatternIndex, first: LocalDate, today: LocalD
             index.metric(observation, measure.slot, symptom.takeIf { measure.symptom }))
     }
 
-internal data class MedicationChange(val courseId: String, val date: LocalDate, val label: String, val stop: Boolean = false) {
+internal data class MedicationChange(
+    val courseId: String, val date: LocalDate, val label: String, val stop: Boolean = false,
+    val detail: String = "", val entryKey: String = label,
+) {
     val laterWeekStart: LocalDate get() = if (stop) date.plusDays(1) else date
 }
 
-internal fun medicationComparison(before: List<MedicationReading>, after: List<MedicationReading>,
-    measure: MedicationMeasure, symptom: String): String {
-    fun rated(rows: List<MedicationReading>) = rows.filterNot { it.ahead }.mapNotNull { it.level }.filter { it >= 0 }
-    val earlier = rated(before)
-    val later = rated(after)
-    if (earlier.isEmpty() || later.isEmpty()) return "There are too few rated observations to compare the two weeks."
-    fun count(levels: List<Int>) = levels.count { if (measure.symptom) it > 0 else it <= 1 }
-    val subject = if (measure.symptom) symptom else "Low or very low energy"
-    return "$subject was recorded on ${count(earlier)} of ${earlier.size} rated dates in the earlier week and ${count(later)} of ${later.size} in the later week."
-}
+private fun MedicationRegimen.description() =
+    listOf(medicationAmount(strength, amount, unit), schedule.orEmpty()).filter(String::isNotBlank).joinToString(" · ")
 
-private fun Diary.changes(course: MedicationCourse): List<MedicationChange> {
-    val plans = regimens.filter { it.courseId == course.id }
-    fun details(plan: MedicationRegimen?) = listOfNotNull(
-        medicationAmount(plan?.strength, plan?.amount, plan?.unit).ifBlank { null }, plan?.schedule).joinToString(" · ")
+internal fun Diary.changes(course: MedicationCourse): List<MedicationChange> {
+    val plans = regimens.filter { it.courseId == course.id && it.effective != null }.sortedBy { it.effective }
     return buildList {
-        fun addEvent(date: String?, label: String, plan: MedicationRegimen? = null, stop: Boolean = false) {
-            if (date != null) add(MedicationChange(course.id, LocalDate.parse(date),
-                listOf(label, details(plan)).filter(String::isNotBlank).joinToString(" · "), stop))
+        course.start?.let { start ->
+            add(MedicationChange(course.id, LocalDate.parse(start), "Started taking", entryKey = "start",
+                detail = plans.lastOrNull { it.effective == start }?.description().orEmpty()))
         }
-        addEvent(course.start, "Started", plans.firstOrNull { it.effective == course.start })
-        plans.filter { it.effective != course.start }.forEach { addEvent(it.effective, "Regimen change", it) }
-        addEvent(course.end, "Last day", stop = true)
+        plans.forEachIndexed { i, plan ->
+            if (plan.effective == course.start) return@forEachIndexed
+            val old = plans.getOrNull(i - 1)
+            val before = old?.description().orEmpty()
+            val after = plan.description()
+            val amountBefore = old?.amount?.toBigDecimalOrNull()
+            val amountAfter = plan.amount?.toBigDecimalOrNull()
+            val comparable = old != null && old.unit == plan.unit && old.strength == plan.strength
+            val label = when {
+                old == null -> "Schedule recorded"
+                old.schedule != plan.schedule -> "Schedule changed"
+                comparable && amountBefore != null && amountAfter != null && amountBefore < amountAfter -> "Dose increased"
+                comparable && amountBefore != null && amountAfter != null && amountBefore > amountAfter -> "Dose reduced"
+                else -> "Regimen changed"
+            }
+            val detail = when {
+                after.isBlank() -> "Dose and schedule unknown"
+                before.isBlank() || before == after -> after
+                else -> "$before → $after"
+            }
+            add(MedicationChange(course.id, LocalDate.parse(plan.effective!!), label, detail = detail, entryKey = "plan-${plan.id}"))
+        }
+        course.end?.let {
+            add(MedicationChange(course.id, LocalDate.parse(it), "Last day of course", stop = true, entryKey = "stop"))
+        }
     }.sortedBy { it.date }
 }
 
-@Composable
-fun MedicationPatterns(diary: Diary, start: LocalDate, end: LocalDate, initialCourseId: String?, openDay: (String) -> Unit) {
-    val courses = diary.courses.sortedWith(compareBy({ it.ended }, { it.name.lowercase() }, { it.start }))
-    if (courses.isEmpty()) {
-        Text("Add a medication in History to explore your diary around a change.")
-        return
-    }
-    var selected by rememberSaveable(initialCourseId) { mutableStateOf(initialCourseId) }
-    val course = courses.find { it.id == selected } ?: courses.first()
-    val events = remember(diary) { diary.courses.flatMap { diary.changes(it) } }
-    val options = events.filter { it.courseId == course.id && it.date in start..end }
-    val index = remember(diary) { PatternIndex(diary) }
-    val today = LocalDate.now()
-    val prn = diary.doses.filter { it.courseId == course.id && it.asNeeded && it.date in start.toString()..end.toString() }
-    val names = courses.map {
-        listOf(it.name, if (it.ended) "Past" else "Current", it.start ?: "Start unknown").joinToString(" · ")
-    }
-    PatternMenu("Medication · ${names[courses.indexOf(course)]}", names, { selected = courses[it].id })
-
-    var eventKey by rememberSaveable(course.id) { mutableStateOf<String?>(null) }
-    val event = options.find { "${it.date} ${it.label}" == eventKey } ?: options.lastOrNull()
-    val symptomOptions = (symptomLabels + diary.checks.flatMap { it.symptoms.keys }).distinct()
-    var symptom by rememberSaveable { mutableStateOf("Headache") }
-    var measure by rememberSaveable { mutableStateOf(MedicationMeasure.Evening) }
-    if (event != null) {
-        val eventNames = options.map { "${it.date.display()} · ${it.label}" }
-        PatternMenu("Change · ${eventNames[options.indexOf(event)]}", eventNames, {
-            eventKey = "${options[it].date} ${options[it].label}"
-        })
-        PatternMenu("Diary measure · ${measure.label}", MedicationMeasure.values().map { it.label }, {
-            measure = MedicationMeasure.values()[it]
-        })
-        if (measure.symptom) PatternMenu("Symptom · $symptom", symptomOptions, { symptom = symptomOptions[it] })
-        var expanded by rememberSaveable(course.id, event.date.toString(), event.label) { mutableIntStateOf(-1) }
-        val weeks = listOf(event.laterWeekStart.minusWeeks(1), event.laterWeekStart).map {
-            medicationWeek(index, it, today, measure, symptom)
-        }
-        Text(medicationComparison(weeks.first(), weeks.last(), measure, symptom))
-        val titles = if (event.stop) listOf("Week ending on the last day", "Week after stopping")
-            else listOf("Week before", "From this change")
-        titles.forEachIndexed { n, title ->
-            val rows = weeks[n]
-            val first = rows.first().day
-            val eligible = rows.count { !it.ahead }
-            val rated = rows.mapNotNull { it.level }.filter { it >= 0 }
-            val unrated = rows.count { it.level == UNRATED_SYMPTOM }
-            val recorded = rated.size + unrated
-            Card(Modifier.fillMaxWidth()) {
-                Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text(title, style = MaterialTheme.typography.titleMedium)
-                    Text("${first.display()} – ${rows.last().day.display()}")
-                    Text("$recorded of $eligible eligible observations recorded")
-                    if (measure.symptom) Text("${rated.count { it > 0 }} with $symptom · ${rated.count { it == 0 }} marked None · $unrated unrated")
-                    else Text("${rated.count { it <= 1 }} with low or very low energy")
-                    if (eligible < 7) Text("${7 - eligible} still ahead")
-                    val contexts = rows.map { it.day }.filter { it <= today }
-                    val work = contexts.count { index.status(it, Factor.Work) == true }
-                    val activity = contexts.count { date -> index.activities[date.toString()].orEmpty().any { it.restKind == null && it.tags.any { tag -> tag != "Quiet rest" } } ||
-                        index.status(date, Factor.Social) == true || index.status(date, Factor.Household) == true }
-                    val rest = contexts.count { date -> index.activities[date.toString()].orEmpty().any { it.restKind != null || "Quiet rest" in it.tags } }
-                    Text("Days with recorded work: $work · activity: $activity · rest: $rest")
-                    events.filter { it != event && it.date in first..rows.last().day }.forEach { other ->
-                        val name = courses.firstOrNull { it.id == other.courseId }?.name.orEmpty()
-                        Text("${other.date.display()} · $name · ${other.label}")
-                    }
-                    OutlinedButton(onClick = { expanded = if (expanded == n) -1 else n }) {
-                        Text(if (expanded == n) "Hide dates" else "See dates")
-                    }
-                    if (expanded == n) rows.forEach { row ->
-                        var show by rememberSaveable(course.id, row.day.toString()) { mutableStateOf(false) }
-                        val following = if (row.observation != row.day) " → ${row.observation.display()}" else ""
-                        OutlinedButton(onClick = { show = !show }) {
-                            Text("${row.day.display()}$following · ${row.label(measure.symptom)}")
-                        }
-                        if (show) MedicationDateDetail(diary, index, course, row.day, today, symptom, openDay)
-                    }
-                }
-            }
-        }
-        Text("These dates show what you recorded around the change. They cannot establish whether the medication helped or caused a change.")
-    } else Text("No dated start, change or stop in this period.")
-    if (prn.isNotEmpty() || diary.regimens.any { it.courseId == course.id && it.schedule == "As needed" }) {
-        Text("As-needed doses", style = MaterialTheme.typography.titleMedium)
-        if (prn.isEmpty()) Text("No as-needed doses recorded in this period.")
-        prn.groupBy { it.date }.toSortedMap(reverseOrder()).forEach { (date, _) ->
-            Card(Modifier.fillMaxWidth()) {
-                Column(Modifier.padding(14.dp)) {
-                    Text(LocalDate.parse(date).display(), style = MaterialTheme.typography.titleMedium)
-                    MedicationDateDetail(diary, index, course, LocalDate.parse(date), today, symptom, openDay)
-                }
-            }
-        }
+private data class MedicineChoice(val course: MedicationCourse, val event: MedicationChange? = null,
+    val asNeeded: Boolean = false, val latest: String? = event?.date?.toString()) {
+    val key = "${course.id}/${event?.entryKey ?: if (asNeeded) "prn" else "undated"}"
+    val caption = when {
+        event != null -> "${event.date.display()} · ${event.label}"
+        asNeeded -> if (course.ended) "Past course · As needed" else "As needed"
+        else -> "No dated change"
     }
 }
 
+private fun Diary.medicineChoices(): List<MedicineChoice> = courses.flatMap { course ->
+    val plans = regimens.filter { it.courseId == course.id }
+    val lastDose = doses.asSequence().filter { it.courseId == course.id && it.asNeeded }.maxOfOrNull { it.date }
+    val prn = plans.any { it.schedule == "As needed" } || lastDose != null
+    val changes = if (prn && plans.none { it.schedule != null && it.schedule != "As needed" }) emptyList()
+        else changes(course)
+    buildList {
+        for (change in changes) add(MedicineChoice(course, change))
+        if (prn) add(MedicineChoice(course, asNeeded = true, latest = lastDose ?: course.start))
+        if (!prn && changes.isEmpty()) add(MedicineChoice(course))
+    }
+}.sortedWith(compareByDescending<MedicineChoice> { it.latest }.thenByDescending { it.event?.stop == true }
+    .thenBy { it.course.name.lowercase() }.thenBy { it.key })
+
 @Composable
-private fun MedicationDateDetail(diary: Diary, index: PatternIndex, course: MedicationCourse, date: LocalDate,
-    today: LocalDate, symptom: String, openDay: (String) -> Unit) {
-    val dateKey = date.toString()
-    val doses = diary.doses.filter { it.courseId == course.id && it.date == dateKey }
-    val regimen = diary.scheduledRegimen(course, dateKey)
-    if (regimen != null) Text(listOfNotNull(course.name, regimen.schedule,
-        medicationAmount(regimen.strength, regimen.amount, regimen.unit).ifBlank { null }).joinToString(" · "))
-    val scheduledSlots = listOf("am" to "Morning", "pm" to "Evening").filter { (slot, _) ->
-        regimen?.scheduledDoseDueIn(slot) == true && doses.none { !it.asNeeded && it.slot == slot }
+internal fun MedicationPatterns(diary: Diary, index: PatternIndex, today: LocalDate, initialCourseId: String?,
+    openDay: (String) -> Unit, exit: () -> Unit) {
+    val options = remember(diary.courses, diary.regimens, diary.doses) { diary.medicineChoices() }
+    var selected by rememberSaveable(initialCourseId) { mutableStateOf<String?>(null) }
+    val choice = options.find { it.key == selected } ?: options.find { it.course.id == initialCourseId } ?: options.firstOrNull() ?: return
+    var picking by rememberSaveable { mutableStateOf(false) }
+    var day by rememberSaveable(choice.key) { mutableStateOf<String?>(null) }
+    var symptom by rememberSaveable { mutableStateOf("Brain fog") }
+    val states = rememberSaveableStateHolder()
+    val back = {
+        if (day != null) day = null else if (picking) picking = false else exit()
     }
-    for ((_, label) in scheduledSlots) {
-        val status = if (date > today) "Scheduled" else ASSUMED_TAKEN_LABEL
-        Text("$label · $status")
+    BackHandler(onBack = back)
+    val frame = Modifier.fillMaxSize().padding(horizontal = 20.dp)
+    val gap = Arrangement.spacedBy(12.dp)
+    when {
+        day != null -> key(day) {
+            Column(frame.verticalScroll(rememberScrollState()).padding(bottom = 20.dp), verticalArrangement = gap) {
+                OutlinedButton(onClick = back) { Text(if (choice.asNeeded) "Dose days" else "Comparison") }
+                MedicationReviewDay(diary, index, choice.course, LocalDate.parse(day), today, symptom, openDay)
+            }
+        }
+        picking -> {
+            Column(frame.verticalScroll(rememberScrollState()).padding(bottom = 20.dp), verticalArrangement = gap) {
+                OutlinedButton(onClick = back) { Text("Back") }
+                Text("Choose a change", style = MaterialTheme.typography.headlineMedium, fontFamily = FontFamily.Serif)
+                for ((prn, title) in listOf(false to "Scheduled medicines", true to "As needed")) {
+                    val group = options.filter { it.asNeeded == prn }
+                    if (group.isEmpty()) continue
+                    Text(title, style = MaterialTheme.typography.titleMedium)
+                    for (option in group) {
+                        OutlinedButton(onClick = { selected = option.key; picking = false }, modifier = Modifier.fillMaxWidth()) {
+                            Column(Modifier.fillMaxWidth()) {
+                                Text(option.course.name)
+                                Text(if (prn) listOfNotNull(option.course.start, option.course.end).joinToString(" – ").ifEmpty { "Dates unknown" }
+                                    else option.caption, style = MaterialTheme.typography.bodySmall)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        else -> states.SaveableStateProvider(choice.key) {
+            val event = choice.event
+            val top: @Composable () -> Unit = {
+                OutlinedButton(onClick = exit) { Text("‹  Diary patterns") }
+                Text("Medication patterns", style = MaterialTheme.typography.headlineLarge, fontFamily = FontFamily.Serif)
+                Surface(Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.surfaceVariant) {
+                    Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Column(Modifier.weight(1f)) {
+                            Text(choice.course.name, style = MaterialTheme.typography.titleMedium)
+                            Text(choice.caption, style = MaterialTheme.typography.bodyMedium)
+                        }
+                        if (options.size > 1) FilledTonalButton(onClick = { picking = true }) { Text("Switch") }
+                    }
+                }
+                if (event != null && event.detail.isNotBlank()) Text(event.detail, style = MaterialTheme.typography.bodyMedium)
+            }
+            if (choice.asNeeded) {
+                val days = remember(diary.doses, choice.course.id) {
+                    diary.doses.filter { it.courseId == choice.course.id && it.asNeeded }.groupBy { it.date }.toSortedMap(reverseOrder())
+                }
+                LazyColumn(frame, contentPadding = PaddingValues(bottom = 20.dp), verticalArrangement = gap) {
+                    item { Column(verticalArrangement = gap) { top() } }
+                    item {
+                        Surface(shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.primaryContainer) {
+                            Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Text("On the days you took it", style = MaterialTheme.typography.headlineSmall, fontFamily = FontFamily.Serif)
+                                val withReason = days.values.count { doses -> doses.any { !it.reason.isNullOrBlank() } }
+                                val coverage = when {
+                                    days.isEmpty() -> "No as-needed doses recorded yet."
+                                    withReason == 0 -> "You haven’t added a reason for these doses."
+                                    withReason == 1 && days.size == 1 -> "You recorded why you took it that day."
+                                    else -> "You recorded why you took it on $withReason of ${days.size} dose days."
+                                }
+                                Text(coverage)
+                            }
+                        }
+                    }
+                    items(days.keys.toList(), key = { it }) { date ->
+                        val doses = days.getValue(date)
+                        val reasons = doses.mapNotNull { it.reason }.distinct().joinToString(" · ").ifBlank { "Reason unrecorded" }
+                        OutlinedButton(onClick = { day = date }, modifier = Modifier.fillMaxWidth().testTag("medication-dose-day-$date")) {
+                            Column(Modifier.fillMaxWidth()) {
+                                Text(LocalDate.parse(date).display())
+                                Text("${doses.size} ${if (doses.size == 1) "dose" else "doses"} · $reasons", style = MaterialTheme.typography.bodyMedium)
+                            }
+                        }
+                    }
+                }
+            } else {
+                Column(frame.verticalScroll(rememberScrollState()).padding(bottom = 20.dp), verticalArrangement = gap) {
+                    top()
+                    if (event == null) Text("There’s no dated start, change or stop to compare for this course.")
+                    else MedicationWeeks(diary, index, event, today, symptom, { symptom = it }, { day = it.toString() })
+                }
+            }
+        }
     }
-    if (doses.isEmpty() && scheduledSlots.isEmpty()) Text(when {
-        !course.includesMedicationDate(dateKey) -> "Outside the dated schedule"
-        regimen == null -> "No dated schedule or dose recorded"
-        else -> "No dose answer recorded"
-    })
-    doses.sortedBy { it.time ?: "" }.forEach { dose ->
-        val whenTaken = if (dose.asNeeded) dose.time ?: "Time unrecorded" else if (dose.slot == "am") "Morning" else "Evening"
-        val reason = if (dose.asNeeded) dose.reason ?: "Reason unrecorded" else dose.reason
-        Text(listOfNotNull(course.name, whenTaken, dose.status,
-            medicationAmount(dose.strength, dose.amount, dose.unit).ifBlank { null }, reason).joinToString(" · "))
-    }
-    val activities = index.activities[dateKey].orEmpty()
-    index.status(date, Factor.Work)?.let { Text(if (it) "Work recorded" else "Marked no work") }
-    activities.forEach { activity ->
-        val description = listOfNotNull(activity.tags.sorted().joinToString(", ").ifBlank { activity.restKind },
-            activity.restPeriod, activity.workLength ?: activity.duration, activity.effort).joinToString(" · ")
-        if (description.isNotBlank()) Text(description)
-    }
-    if (index.days[dateKey]?.noRests == true) Text("Marked no rests")
-    listOf(MedicationMeasure.Morning, MedicationMeasure.Evening, MedicationMeasure.MorningSymptom,
-        MedicationMeasure.EveningSymptom, MedicationMeasure.Next, MedicationMeasure.Second).forEach { measure ->
-        val day = date.plusDays(measure.lag)
-        val label = if (measure.symptom) "${if (measure.slot == "am") "Morning" else "Evening"} · $symptom" else measure.label
-        val value = MedicationReading(date, day, day > today, index.metric(day, measure.slot, symptom.takeIf { measure.symptom }))
-        Text("$label · ${day.display()} · ${value.label(measure.symptom)}")
-    }
-    if (date <= today) OutlinedButton(onClick = { openDay(dateKey) }) { Text("Open check-in") }
 }

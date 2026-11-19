@@ -11,11 +11,30 @@ class MedicationPatternsTest {
         assertEquals(date.plusDays(1), stop.laterWeekStart)
         assertEquals(date, stop.copy(stop = false).laterWeekStart)
         val earlier = listOf(0, UNRATED_SYMPTOM, 2, null).map { MedicationReading(date, date, false, it) }
-        val after = listOf(MedicationReading(date, date, false, 1))
-        val summary = medicationComparison(earlier, after, MedicationMeasure.EveningSymptom, "Headache")
-        assertTrue(summary.contains("1 of 2 rated dates"))
-        assertTrue(summary.contains("1 of 1 in the later week"))
-        assertTrue(medicationComparison(earlier, emptyList(), MedicationMeasure.Evening, "").contains("too few"))
+        val later = listOf(MedicationReading(date, date, false, 1), MedicationReading(date, date, true, 3))
+        val story = medicationWeekStory(earlier, later, MedicationMeasure.EveningSymptom, "Headache")
+        assertEquals("Too few ratings to compare.", story.title)
+        assertTrue(story.detail.contains("2 days in the first week and 1 day in the second"))
+    }
+
+    @Test fun typicalRatingsKeepBothMiddleCategories() {
+        val start = LocalDate.of(2026, 11, 1)
+        fun rows(vararg values: Int) = values.mapIndexed { i, level ->
+            val day = start.plusDays(i.toLong())
+            MedicationReading(day, day, false, level)
+        }
+        val earlier = rows(0, 0, 2, 2)
+        val later = rows(1, 1, 1)
+        val overlap = medicationWeekStory(earlier, later, MedicationMeasure.Evening, "")
+        assertEquals("The typical ratings overlapped.", overlap.title)
+        assertTrue(overlap.detail.contains("very low to medium"))
+        assertEquals("Evening energy was higher.",
+            medicationWeekStory(earlier, rows(3, 3, 4), MedicationMeasure.Evening, "").title)
+        assertEquals("Evening brain fog was milder.",
+            medicationWeekStory(rows(3, 2, 2), later, MedicationMeasure.EveningSymptom, "Brain fog").title)
+        val same = medicationWeekStory(later, rows(0, 1, 2), MedicationMeasure.Morning, "")
+        assertEquals("Morning energy was about the same.", same.title)
+        assertEquals("Your typical rating was low in both weeks.", same.detail)
     }
 
     @Test fun weeksKeepGapsAndCalendarFollowUps() {

@@ -222,3 +222,7 @@ The owner approved this design on 18 November 2026. Today handles dose logging, 
 ## Scheduled dose defaults and action buttons · 1.8.1
 
 Place Medications immediately below Symptoms in both check-ins. Preselect Taken for a due scheduled dose. Label the default “Assumed taken” and derive it from the regimen for that date and slot. An explicit Taken or Skipped overrides it. Clearing the explicit answer restores the default. Keep as-needed doses manual. Display the same distinction in History and Patterns. Viewing a schedule leaves the diary, reminders and check-in completion state untouched. Give standalone actions such as Manage medications a visible button shape.
+
+## Medication patterns · 1.9
+
+Open the latest medication change directly, or the selected course from History. Use one Switch action for dated changes and as-needed courses. For scheduled changes, compare two calendar weeks, leading with a plain-language observation and tappable daily readings. Opening a date shows the dose, diary context, and the next two dated morning entries. For as-needed medication, open the list of actual dose days directly. Keep repeat doses, uncertain status, missing readings and future follow-ups distinct. Use the existing diary on device.

@@ -74,7 +74,7 @@ internal fun PatternMenu(label: String, options: List<String>, choose: (Int) -> 
 fun PatternsScreen(diary: Diary, onDate: (String) -> Unit, onToday: () -> Unit, initialCourseId: String? = null) {
     val index = remember(diary) { PatternIndex(diary) }
     val today = LocalDate.now()
-    var period by rememberSaveable { mutableIntStateOf(if (initialCourseId == null) 28 else 0) }
+    var period by rememberSaveable { mutableIntStateOf(28) }
     var factor by rememberSaveable { mutableStateOf(Factor.Work) }
     var outcome by rememberSaveable { mutableStateOf(FollowUp.Next) }
     var metric by rememberSaveable { mutableStateOf<String?>(null) }
@@ -88,11 +88,11 @@ fun PatternsScreen(diary: Diary, onDate: (String) -> Unit, onToday: () -> Unit, 
     var selectedEnd by rememberSaveable { mutableStateOf<String?>(null) }
     val end = if (period == 0) today else selectedEnd?.let(LocalDate::parse) ?: today
     var medicationView by rememberSaveable { mutableStateOf(initialCourseId != null) }
-    val firstMedicationDate = remember(diary.courses, diary.regimens, diary.doses) {
-        (diary.courses.flatMap { listOfNotNull(it.start, it.end) } + diary.regimens.mapNotNull { it.effective } + diary.doses.map { it.date })
-            .minOrNull()?.let(LocalDate::parse)
+    if (medicationView && diary.courses.isNotEmpty()) {
+        MedicationPatterns(diary, index, today, initialCourseId, onDate) { medicationView = false }
+        return
     }
-    val start = if (period == 0) minOf(end, index.first ?: end, if (medicationView) firstMedicationDate ?: end else end) else end.minusDays(period.toLong() - 1)
+    val start = if (period == 0) minOf(end, index.first ?: end) else end.minusDays(period.toLong() - 1)
     val longRange = ChronoUnit.DAYS.between(start, end) >= 62
     val month = selectedMonth?.let(YearMonth::parse)
     val displayStart = month?.let { maxOf(start, it.atDay(1)) } ?: start
@@ -116,6 +116,9 @@ fun PatternsScreen(diary: Diary, onDate: (String) -> Unit, onToday: () -> Unit, 
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp),
         verticalArrangement = Arrangement.spacedBy(if (largeType) 10.dp else 8.dp)) {
         TitleArt("Patterns", "patterns")
+        if (diary.courses.isNotEmpty()) {
+            FilledTonalButton(onClick = { medicationView = true }) { Text("Medication patterns") }
+        }
         val rangeFormat = if (displayStart.year == displayEnd.year) shortDate else DateTimeFormatter.ofPattern("d MMM yyyy")
         val rangeLabel = "${displayStart.format(rangeFormat)} – ${displayEnd.format(rangeFormat)}"
         if (period == 0 || month != null) {
@@ -142,17 +145,6 @@ fun PatternsScreen(diary: Diary, onDate: (String) -> Unit, onToday: () -> Unit, 
                         }
                     }
                 }
-            }
-        }
-        if (diary.courses.isNotEmpty()) {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                FilterChip(!medicationView, { medicationView = false }, { Text("Diary patterns") })
-                FilterChip(medicationView, { medicationView = true }, { Text("Medications") })
-            }
-            if (medicationView) {
-                MedicationPatterns(diary, displayStart, displayEnd, initialCourseId, onDate)
-                Spacer(Modifier.height(20.dp))
-                return@Column
             }
         }
         val showDaily = !longRange || period == 90 || month != null
