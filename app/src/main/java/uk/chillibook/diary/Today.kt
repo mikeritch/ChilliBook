@@ -32,6 +32,7 @@ fun TodayScreen(diary: Diary, date: String, slot: String, onDate: (String) -> Un
         Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(scroll)) {
             TitleArt(title, slot)
             CheckInDateSelector(date) { chooseDiaryDate(context, date, chosen = onDate) }
+            Spacer(Modifier.height(14.dp))
             SlotSwitch(slot, onSlot)
             Spacer(Modifier.height(22.dp))
             val energyQuestion = "How much energy do you have now?"
@@ -65,7 +66,10 @@ fun TodayScreen(diary: Diary, date: String, slot: String, onDate: (String) -> Un
             Spacer(Modifier.height(20.dp))
             key(date, slot) { TodayMedication(diary, date, slot, edit, manageMedication) }
             if (!morning) {
-                MultiField("Context", listOf("Fighting a bug", "Unusual stress", "Change in medication"), day?.context.orEmpty()) { value ->
+                Spacer(Modifier.height(20.dp))
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                Spacer(Modifier.height(20.dp))
+                ContextOptions(day?.context.orEmpty()) { value ->
                     edit { d -> d.changeDay(date) { it.copy(context = it.context.toggle(value)) } }
                 }
             }

@@ -18,6 +18,8 @@ import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.withResumed
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
@@ -26,9 +28,11 @@ import kotlinx.coroutines.launch
 internal fun UpdateSettings() {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
     var release by remember { mutableStateOf<UpdateRelease?>(null) }
     var installer by rememberSaveable { mutableStateOf<Intent?>(null) }
-    var message by remember { mutableStateOf("") }
+    var launchPending by rememberSaveable { mutableStateOf(false) }
+    var message by rememberSaveable { mutableStateOf("") }
     var work by remember { mutableStateOf<Job?>(null) }
     val button = Modifier.fillMaxWidth().heightIn(min = 48.dp)
 
@@ -47,6 +51,22 @@ internal fun UpdateSettings() {
         else message = "To install the update, allow ChilliBook to install apps in Android settings."
     }
 
+    fun requestInstall() {
+        if (context.packageManager.canRequestPackageInstalls()) openInstaller()
+        else try {
+            permission.launch(Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:${context.packageName}")))
+        } catch (_: RuntimeException) {
+            message = "Couldn’t open Android settings. Allow ChilliBook to install apps, then try again."
+        }
+    }
+
+    LaunchedEffect(launchPending) {
+        if (launchPending) lifecycle.withResumed {
+            launchPending = false
+            if (installer != null) requestInstall()
+        }
+    }
+
     QuestionText("App updates")
     Text("Installed version ${BuildConfig.VERSION_NAME} (build ${BuildConfig.VERSION_CODE})")
     if (BuildConfig.UPDATE_REPOSITORY.isBlank()) {
@@ -61,14 +81,7 @@ internal fun UpdateSettings() {
             OutlinedButton(onClick = { work?.cancel() }, modifier = button) { Text("Cancel") }
         }
         installer != null -> {
-            OutlinedButton(onClick = {
-                if (context.packageManager.canRequestPackageInstalls()) openInstaller()
-                else try {
-                    permission.launch(Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:${context.packageName}")))
-                } catch (_: RuntimeException) {
-                    message = "Couldn’t open Android settings. Allow ChilliBook to install apps, then try again."
-                }
-            }, modifier = button) { Text("Install update") }
+            OutlinedButton(onClick = ::requestInstall, modifier = button) { Text("Install update") }
         }
         available != null -> {
             Text("Version ${available.version} is available.")
@@ -77,7 +90,7 @@ internal fun UpdateSettings() {
                 work = scope.launch {
                     try {
                         installer = GitHubUpdate.download(context, available)
-                        message = "The update is ready. Android will ask you to confirm installation."
+                        launchPending = true
                     } catch (e: CancellationException) {
                         message = "Download cancelled."
                         throw e
@@ -87,7 +100,7 @@ internal fun UpdateSettings() {
                         work = null
                     }
                 }
-            }, modifier = button) { Text("Download update") }
+            }, modifier = button) { Text("Download and install update") }
         }
         else -> {
             OutlinedButton(onClick = {

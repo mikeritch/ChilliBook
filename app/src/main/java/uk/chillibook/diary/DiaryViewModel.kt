@@ -28,7 +28,8 @@ internal object DiaryOperations {
 
 class DiaryViewModel(app: Application) : AndroidViewModel(app) {
     private val storage = Storage(app)
-    private var committed = Diary()
+    internal var committed by mutableStateOf(Diary())
+        private set
     var diary by mutableStateOf<Diary?>(null)
         private set
     var status by mutableStateOf("")

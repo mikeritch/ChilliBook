@@ -25,12 +25,15 @@ internal fun nextReminder(now: ZonedDateTime, minute: Int, lastDate: String?): Z
     else today.plusDays(1).atTime(time).atZone(now.zone)
 }
 
+internal fun Check.hasSlotAnswer() = energy != null || sleep != null || symptoms.isNotEmpty()
+
+internal fun Day.hasEveningAnswer() = work != null || social != null || household != null ||
+    wellbeing != null || impact != null || context.isNotEmpty() || noRests == true
+
 internal fun Diary.answeredReminder(date: String, slot: String): Boolean =
     doses.any { it.date == date && it.slot == slot } ||
-    checks.any { it.date == date && it.slot == slot && (it.energy != null || it.sleep != null || it.symptoms.isNotEmpty()) } ||
-        (slot == "pm" && (activities.any { it.date == date } || days.any { it.date == date &&
-            (it.work != null || it.social != null || it.household != null || it.wellbeing != null ||
-                it.impact != null || it.context.isNotEmpty() || it.noRests == true) }))
+        checks.any { it.date == date && it.slot == slot && it.hasSlotAnswer() } ||
+        (slot == "pm" && (activities.any { it.date == date } || days.any { it.date == date && it.hasEveningAnswer() }))
 
 object Reminders {
     const val EXTRA_SLOT = "reminder_slot"

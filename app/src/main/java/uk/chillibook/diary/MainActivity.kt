@@ -162,6 +162,10 @@ private fun DiaryHome(vm: DiaryViewModel, localDay: String, target: ReminderTarg
         else -> null
     }
     val celebration = key(localDay, vm.resetGeneration) { rememberDayCelebration(checkInDate, vm.dayCompletions) }
+    val saved = vm.committed
+    val streak = remember(saved, checkInDate, localDay) {
+        if (checkInDate == null) 0 else saved.checkInStreak(checkInDate, localDay)
+    }
     val earned = checkInDate != null && vm.celebrationDay == localDay
     Surface(color = colors.background, contentColor = colors.onBackground, modifier = Modifier.fillMaxSize()) {
         Box(Modifier.fillMaxSize()) {
@@ -178,7 +182,7 @@ private fun DiaryHome(vm: DiaryViewModel, localDay: String, target: ReminderTarg
                             date == localDay -> "Today"
                             else -> "Check-in"
                         },
-                        earned = earned, animation = celebration, modifier = Modifier.weight(1f)
+                        earned = earned, streak = streak, animation = celebration, modifier = Modifier.weight(1f)
                     )
                     if (!settings) IconButton(onClick = { settings = true }) {
                         Icon(painterResource(R.drawable.settings), "Settings", Modifier.size(21.dp))

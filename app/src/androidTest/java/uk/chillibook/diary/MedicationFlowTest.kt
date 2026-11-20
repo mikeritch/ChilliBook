@@ -104,13 +104,26 @@ class MedicationFlowTest {
                     if (!large) {
                         tap("Add medication")
                         compose.onNodeWithText("Medication name").performTextInput("Trial course")
+                        compose.onNodeWithText("Unit · tablets").assertExists()
                         tap("Save")
                         stored { d -> d.courses.any { it.name == "Trial course" && it.start == null } }
+                        val courseId = runBlocking { store.read() }.courses.single { it.name == "Trial course" }.id
+                        assertTrue(runBlocking { store.read() }.regimens.none { it.courseId == courseId })
                         tap("Record change")
                         tap("Morning")
                         tap("Save")
-                        val courseId = runBlocking { store.read() }.courses.single { it.name == "Trial course" }.id
-                        stored { d -> d.regimens.singleOrNull { it.courseId == courseId }?.effective == today.toString() }
+                        stored { d -> d.regimens.singleOrNull { it.courseId == courseId }?.let {
+                            it.effective == today.toString() && it.unit == "tablets"
+                        } == true }
+                        tap("Correct regimen")
+                        tap("Unit · tablets")
+                        compose.onNodeWithText("Other").performScrollTo().performClick()
+                        compose.onNodeWithText("Custom unit").performScrollTo().performTextInput("sachets")
+                        tap("Save")
+                        stored { d -> d.regimens.single { it.courseId == courseId }.unit == "sachets" }
+                        tap("Correct regimen")
+                        compose.onNodeWithText("Custom unit").assert(hasText("sachets"))
+                        tap("Save")
                         tap("Record stop date")
                         tap("Save")
                         stored { d -> d.courses.single { it.id == courseId }.end == today.toString() }

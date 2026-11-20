@@ -56,11 +56,16 @@ internal fun TodayDetails(diary: Diary, date: String, slot: String, edit: DiaryE
 
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
-internal fun MultiField(label: String, choices: List<String>, value: Set<String>, toggle: (String) -> Unit) {
-    var expanded by rememberSaveable { mutableStateOf(false) }
-    DetailLink(if (value.isEmpty()) label else "$label · ${value.sorted().joinToString()}", if (expanded) "⌃" else "⌄") { expanded = !expanded }
-    if (expanded) choices.forEach { name ->
-        AnswerTile(label, name, name in value, Modifier.fillMaxWidth()) { toggle(name) }
+internal fun ContextOptions(selected: Set<String>, toggle: (String) -> Unit) {
+    val presets = listOf("Fighting a bug", "Unusual stress", "Change in medication")
+    QuestionText("Context")
+    Spacer(Modifier.height(10.dp))
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        for (name in (presets + selected.sorted()).distinct()) {
+            val checked = name in selected
+            DiaryChip(name, checked, onClick = { toggle(name) }, symbol = if (checked) "−" else "+", remove = checked)
+        }
     }
 }

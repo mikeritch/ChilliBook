@@ -110,7 +110,8 @@ private fun MedicineEditor(
     var effective by rememberSaveable { mutableStateOf(if (form == MedicineForm.Regimen) initial?.effective else course?.end ?: today) }
     var strength by rememberSaveable { mutableStateOf(initial?.strength.orEmpty()) }
     var amount by rememberSaveable { mutableStateOf(initial?.amount.orEmpty()) }
-    var unit by rememberSaveable { mutableStateOf(initial?.unit.orEmpty()) }
+    var unit by rememberSaveable { mutableStateOf(if (initial == null) DEFAULT_MEDICATION_UNIT else initial.unit.orEmpty()) }
+    var unitEdited by rememberSaveable { mutableStateOf(false) }
     var schedule by rememberSaveable { mutableStateOf(initial?.schedule) }
     val title = when (form) {
         MedicineForm.Add -> "Add medication"
@@ -141,13 +142,19 @@ private fun MedicineEditor(
                     .maxByOrNull { it.effective!! }
                 strength = previous?.strength.orEmpty()
                 amount = previous?.amount.orEmpty()
-                unit = previous?.unit.orEmpty()
+                unit = if (previous == null) DEFAULT_MEDICATION_UNIT else previous.unit.orEmpty()
+                unitEdited = false
                 schedule = previous?.schedule
             }
         }
         MedicineTextField("Strength (optional)", strength) { strength = it }
         MedicineTextField("Amount (optional)", amount) { amount = it }
-        MedicineTextField("Unit (optional)", unit) { unit = it }
+        key(effective) {
+            MedicationUnitField(unit) {
+                unit = it
+                unitEdited = true
+            }
+        }
         Text("Schedule", style = MaterialTheme.typography.titleMedium)
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             listOf(null, "Morning", "Evening", "Morning and evening", "As needed").forEach { option ->
@@ -186,7 +193,7 @@ private fun MedicineEditor(
                 val base = if (form == MedicineForm.Regimen) initial else null
                 (base ?: MedicationRegimen(courseId = updated.id)).copy(effective = if (creating) start ?: today.takeIf { !ended && schedule != null } else effective,
                     strength = strength.trim().ifBlank { null }, amount = amount.trim().ifBlank { null },
-                    unit = unit.trim().ifBlank { null }, schedule = schedule)
+                    unit = if (unitEdited) unit.trim().ifBlank { null } else unit.ifEmpty { null }, schedule = schedule)
             } else null
             edit { current ->
                 val courses = when {
@@ -197,7 +204,7 @@ private fun MedicineEditor(
                 val regimens = when {
                     regimen == null -> current.regimens
                     form == MedicineForm.Regimen -> current.regimens.map { if (it.id == regimen.id) regimen else it }
-                    creating && regimen.strength == null && regimen.amount == null && regimen.unit == null && regimen.schedule == null -> current.regimens
+                    creating && regimen.strength == null && regimen.amount == null && (regimen.unit == null || !unitEdited) && regimen.schedule == null -> current.regimens
                     else -> current.regimens + regimen
                 }
                 current.copy(courses = courses, regimens = regimens)

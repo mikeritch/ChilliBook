@@ -2,12 +2,12 @@
 
 **First install or upgrade from 1.0 or 1.1.** Download the signed APK from the [latest GitHub release](https://github.com/mikeritch/ChilliBook/releases/latest), open it on an Android 8.0 or newer phone and tap **Install** or **Update**. Android may ask you to allow the app that opened the APK to install apps. Keep ChilliBook installed when updating so Android retains its private data.
 
-**From version 1.2 onward.** Open **Settings → App updates → Check for updates**. When a release is available, choose **Download update → Install update**. The first time, Android may ask you to allow ChilliBook to install apps from this source. Return to ChilliBook and confirm **Update** in the system installer. Database migrations run automatically the next time the diary opens. Backups are optional.
+**From version 1.2 onward.** Open **Settings → App updates → Check for updates**. If your installed version is 1.2 through 1.10, choose **Download update → Install update**. Starting in 1.11, **Download and install update** opens the Android installer automatically after verification. The first time, Android may ask you to allow ChilliBook to install apps from this source. Return to ChilliBook and confirm **Update** in the system installer. Database migrations run automatically the next time the diary opens. Backups are optional.
 
 **Over USB.** Enable USB debugging and authorise the computer on the phone. Place the signed APK beside [Install ChilliBook.command](<release/Install ChilliBook.command>) and double-click the command on macOS. With Android SDK Platform-Tools on your path, you can also run the following from the project root.
 
 ```sh
-adb -d install -r release/ChilliBook-1.10.apk
+adb -d install -r release/ChilliBook-1.11.apk
 ```
 
 ## Back up or move the diary
@@ -26,12 +26,22 @@ Choose **Settings → Back up diary** and select a private destination. The JSON
 apk=app/build/outputs/apk/release/app-release.apk
 apksigner verify --print-certs "$apk"
 aapt dump badging "$apk" | head -1
-version=1.10  # set to the version you just built
+version=1.11  # set to the version you just built
 cp "$apk" "release/ChilliBook-$version.apk"
 git tag "v$version"
 git push origin HEAD "v$version"
 gh release create "v$version" "release/ChilliBook-$version.apk" --verify-tag --generate-notes --latest
 ```
+
+## Release 1.11
+
+Today gives the date picker and morning/evening switch more room. In the evening, Context has its own section below Medications. Tap any context option to select it and tap again to remove it.
+
+A completed morning and evening earn one day toward the streak beside the check-in flower. Yesterday’s streak stays visible while you fill in today. Backfilling or correcting a date updates the count from the saved diary.
+
+New medication regimens offer tablets by default, common units in a list, and an **Other** field for a custom unit. Existing entries keep their original units. Use **Download and install update** for future updates. Android asks for confirmation after ChilliBook checks the download, package and signer.
+
+The signed 1.10 → 1.11 emulator upgrade preserved all records, IDs, dates, values and preferences in the synthetic diary. An isolated test of the updater downloaded the official 1.10 APK and opened Android’s confirmation screen after the one-time source permission. [Check-in and streak](verification/1.11/today.png) · [Evening Context](verification/1.11/context.png) · [Context at 200% text](verification/1.11/large.png)
 
 ## Release 1.10
 

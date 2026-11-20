@@ -83,12 +83,12 @@ private fun AsNeededDose(number: Int, dose: MedicationDose, edit: ((Diary) -> Di
             OutlinedButton(onClick = picker) { Text(dose.time?.let { "Time · $it" } ?: "Add time") }
             if (dose.time != null) OutlinedButton(onClick = { update { it.copy(time = null) } }) { Text("Clear time") }
             OutlinedTextField(amount, { amount = it }, label = { Text("Amount (optional)") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-            OutlinedTextField(unit, { unit = it }, label = { Text("Unit (optional)") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+            MedicationUnitField(unit) { unit = it }
             OutlinedTextField(reason, { reason = it }, label = { Text("Reason or note (optional)") }, modifier = Modifier.fillMaxWidth())
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedButton(onClick = { edit { d -> d.copy(doses = d.doses.filterNot { it.id == dose.id }) } }) { Text("Remove dose", color = MaterialTheme.colorScheme.error) }
                 Button(onClick = {
-                    update { it.copy(amount = amount.trim().ifBlank { null }, unit = unit.trim().ifBlank { null }, reason = reason.trim().ifBlank { null }) }
+                    update { it.copy(amount = amount.trim().ifBlank { null }, unit = if (unit == dose.unit.orEmpty()) it.unit else unit.trim().ifBlank { null }, reason = reason.trim().ifBlank { null }) }
                     expanded = false
                 }) { Text("Save details") }
             }

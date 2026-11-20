@@ -90,7 +90,7 @@ internal fun MedicationOverview(diary: Diary, index: PatternIndex, start: LocalD
 }
 
 @Composable
-private fun MedicationDropdown(label: String, options: List<String>, choose: (Int) -> Unit) {
+internal fun MedicationDropdown(label: String, options: List<String>, choose: (Int) -> Unit) {
     var expanded by remember { mutableStateOf(false) }
     Box {
         OutlinedButton(onClick = { expanded = true }, modifier = Modifier.heightIn(min = 48.dp),

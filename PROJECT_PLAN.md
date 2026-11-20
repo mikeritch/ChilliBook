@@ -234,3 +234,11 @@ Choose 7 days, 28 days, 90 days or All time from the dropdown beside Patterns. K
 For each activity, compare low readings that evening and on the next two calendar mornings. Select activity dates inside the chosen range and use any available follow-up readings, including ones beyond its end. Show the recorded denominator on each tile. Pair morning and evening symptom bars on the same scale and count moderate or strong ratings among severity-rated observations. Tap either comparison to open its dates. Keep the full activity frequency and symptom distributions accessible.
 
 For medications, plot the diary measure across a dated change or mark actual as-needed dose days. Use the same course, measure and selected period when opening the detailed comparison. Retain the medication history shortcut and distinguish the final day of a course from its first day off.
+
+## Today, medication units and updater · 1.11
+
+Separate the check-in date and slot controls. Group evening Context options below Medications with individually spaced toggles. Derive consecutive complete days from saved diary records using the same morning/evening completion rules as the celebration. An unfinished today can display the streak through yesterday. Historical corrections, restores and resets must be reflected without storing a duplicate counter.
+
+Offer tablets as the default on new regimens and preserve custom and unknown units on older records. Support common units and a custom entry for both regimen editing and dose corrections. A name alone still saves a course without creating a regimen.
+
+A user-initiated verified download opens Android’s confirmation screen as soon as ChilliBook is in the foreground. If source permission is required, continue to the installer on return. A cancelled or failed verification must never open an installer.
