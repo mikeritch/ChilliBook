@@ -80,44 +80,50 @@ fun SettingsScreen(
     }
 
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp, vertical = 12.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        QuestionText("Appearance")
-        val themes = listOf("system" to "Use device theme", "light" to "Light", "dark" to "Dark")
-        themes.forEach { (id, label) ->
-            AnswerTile("Appearance", label, diary.prefs.theme == id, Modifier.fillMaxWidth()) {
-                edit { current -> current.copy(prefs = current.prefs.copy(theme = id)) }
+        verticalArrangement = Arrangement.spacedBy(24.dp)) {
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            QuestionText("Appearance")
+            val themes = listOf("system" to "Use device theme", "light" to "Light", "dark" to "Dark")
+            themes.forEach { (id, label) ->
+                AnswerTile("Appearance", label, diary.prefs.theme == id, Modifier.fillMaxWidth()) {
+                    edit { current -> current.copy(prefs = current.prefs.copy(theme = id)) }
+                }
+            }
+            if (!status.contains("reset", ignoreCase = true)) SaveNotice(status, retry)
+        }
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            ReminderSettings(diary.prefs, edit)
+        }
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            UpdateSettings()
+        }
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            QuestionText("Your diary backup")
+            Text("A backup contains readable health data, including your entries and settings. The location you choose may sync the file to the cloud.")
+            Button(onClick = {
+                fileStatus = ""
+                create.launch("ChilliBook-${LocalDate.now()}.json")
+            }, enabled = !busy && !resetting, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
+                Text("Back up diary")
+            }
+            OutlinedButton(onClick = {
+                fileStatus = ""
+                open.launch(arrayOf("*/*"))
+            }, enabled = !busy && !resetting, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
+                Text("Restore diary")
+            }
+            if (fileStatus.isNotEmpty()) {
+                Text(fileStatus, Modifier.semantics { liveRegion = LiveRegionMode.Polite })
             }
         }
-        if (!status.contains("reset", ignoreCase = true)) SaveNotice(status, retry)
-        Spacer(Modifier.height(10.dp))
-        ReminderSettings(diary.prefs, edit)
-        Spacer(Modifier.height(10.dp))
-        UpdateSettings()
-        Spacer(Modifier.height(10.dp))
-        QuestionText("Your diary backup")
-        Text("A backup contains readable health data, including your entries and settings. The location you choose may sync the file to the cloud.")
-        Button(onClick = {
-            fileStatus = ""
-            create.launch("ChilliBook-${LocalDate.now()}.json")
-        }, enabled = !busy && !resetting, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
-            Text("Back up diary")
-        }
-        OutlinedButton(onClick = {
-            fileStatus = ""
-            open.launch(arrayOf("*/*"))
-        }, enabled = !busy && !resetting, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
-            Text("Restore diary")
-        }
-        if (fileStatus.isNotEmpty()) {
-            Text(fileStatus, Modifier.semantics { liveRegion = LiveRegionMode.Polite })
-        }
-        Spacer(Modifier.height(10.dp))
-        OutlinedButton(onClick = { resetStep = 1 }, enabled = !busy && !resetting,
-            modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
-            Text("Reset all diary data", color = MaterialTheme.colorScheme.error)
-        }
-        if (status.contains("reset", ignoreCase = true)) {
-            Text(status, Modifier.semantics { liveRegion = LiveRegionMode.Polite })
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            OutlinedButton(onClick = { resetStep = 1 }, enabled = !busy && !resetting,
+                modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
+                Text("Reset all diary data", color = MaterialTheme.colorScheme.error)
+            }
+            if (status.contains("reset", ignoreCase = true)) {
+                Text(status, Modifier.semantics { liveRegion = LiveRegionMode.Polite })
+            }
         }
     }
 

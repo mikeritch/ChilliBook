@@ -117,7 +117,10 @@ private fun PatternsHeader(period: Int, choose: (Int) -> Unit) {
             }
         }
     }
-    if (large) Column { title(); picker() }
+    if (large) Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        title()
+        picker()
+    }
     else Row(Modifier.fillMaxWidth().heightIn(min = 60.dp), verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween) { title(); picker() }
 }

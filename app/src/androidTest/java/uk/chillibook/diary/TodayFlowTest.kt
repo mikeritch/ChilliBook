@@ -219,6 +219,47 @@ class TodayFlowTest {
         }
     }
 
+    @Test fun independentSavedSlotsSurviveReopenWithoutEnergyRatings() {
+        assumeTrue(context.packageName.endsWith(".debug"))
+        Storage(context).use { store ->
+            val initial = runBlocking { store.read() }
+            val date = today.toString()
+            assumeTrue(date !in initial.dates())
+            fun expectStatus(morning: String, evening: String) {
+                for ((name, status) in listOf("Morning" to morning, "Evening" to evening)) {
+                    compose.onNodeWithContentDescription("$name check-in")
+                        .assert(hasStateDescription(status))
+                }
+            }
+            try {
+                ActivityScenario.launch(MainActivity::class.java).use {
+                    slot(morning = true)
+                    select("How refreshed did you feel on waking?", "Mostly")
+                    awaitStored(store) { it.checks.any { check -> check.date == date && check.sleep == 2 } }
+                    compose.waitUntil(10_000) {
+                        compose.onAllNodes(hasContentDescription("Morning check-in") and hasStateDescription("Saved"))
+                            .fetchSemanticsNodes().isNotEmpty()
+                    }
+                    expectStatus("Saved", "No entry")
+                    slot(morning = false)
+                    select("Did you work?", "No")
+                    awaitStored(store) { it.days.any { day -> day.date == date && day.work == false } }
+                }
+                ActivityScenario.launch(MainActivity::class.java).use {
+                    slot(morning = false)
+                    expectStatus("Saved", "Saved")
+                    compose.onNodeWithText("History").performClick()
+                    compose.onNodeWithContentDescription("Morning, Check-in saved", useUnmergedTree = true)
+                        .assertExists()
+                    compose.onNodeWithContentDescription("Evening, Check-in saved", useUnmergedTree = true)
+                        .assertExists()
+                }
+            } finally {
+                runBlocking { store.replace(initial) }
+            }
+        }
+    }
+
     @Test fun oneTapReopenFourTapEveningAndYesterdayCorrection() {
         // The release package and owner data are never test fixtures.
         assumeTrue(context.packageName.endsWith(".debug"))

@@ -45,7 +45,10 @@ fun MedicationManagement(diary: Diary, edit: ((Diary) -> Diary) -> Unit, onPatte
                 }
             } else {
                 TitleArt("Medication history", "history")
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
                     listOf(false to "Current", true to "Past").forEach { (ended, label) ->
                         FilterChip(past == ended, { past = ended; expanded = null }, { Text(label) })
                     }
@@ -56,30 +59,42 @@ fun MedicationManagement(diary: Diary, edit: ((Diary) -> Diary) -> Unit, onPatte
                 if (visible.isEmpty()) Text(if (past) "No past medications." else "No current medications.")
                 visible.forEach { course ->
                     val history = diary.regimens.filter { it.courseId == course.id }.sortedByDescending { it.effective }
-                    HorizontalDivider()
-                    Text(course.name, style = MaterialTheme.typography.titleLarge)
-                    Text("${displayDate(course.start)} – " + if (course.ended) displayDate(course.end) else "present")
-                    history.firstOrNull()?.let { Text(it.description()) }
-                    OutlinedButton(onClick = { expanded = if (expanded == course.id) null else course.id }) {
-                        Text(if (expanded == course.id) "Hide details" else "Show details")
-                    }
-                    if (expanded == course.id) {
-                        if (course.ended) Text("Stopped · ${displayDate(course.end)}")
-                        history.forEach { regimen ->
-                            Text("${displayDate(regimen.effective)} · ${regimen.description()}")
-                            OutlinedButton(onClick = { regimenId = regimen.id; form = MedicineForm.Regimen }) {
-                                Text("Correct regimen")
-                            }
+                    Column(
+                        modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        HorizontalDivider()
+                        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Text(course.name, style = MaterialTheme.typography.titleLarge)
+                            Text("${displayDate(course.start)} – " + if (course.ended) displayDate(course.end) else "present")
+                            history.firstOrNull()?.let { Text(it.description()) }
                         }
-                        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            OutlinedButton(onClick = { form = MedicineForm.Change }) { Text("Record change") }
-                            if (course.ended) {
-                                OutlinedButton(onClick = { form = MedicineForm.Restart }) { Text("Restart medication") }
-                            } else {
-                                OutlinedButton(onClick = { form = MedicineForm.Stop }) { Text("Record stop date") }
+                        OutlinedButton(onClick = { expanded = if (expanded == course.id) null else course.id }) {
+                            Text(if (expanded == course.id) "Hide details" else "Show details")
+                        }
+                        if (expanded == course.id) {
+                            if (course.ended) Text("Stopped · ${displayDate(course.end)}")
+                            history.forEach { regimen ->
+                                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                    Text("${displayDate(regimen.effective)} · ${regimen.description()}")
+                                    OutlinedButton(onClick = { regimenId = regimen.id; form = MedicineForm.Regimen }) {
+                                        Text("Correct regimen")
+                                    }
+                                }
                             }
-                            OutlinedButton(onClick = { form = MedicineForm.Course }) { Text("Correct course details") }
-                            OutlinedButton(onClick = { onPatterns(course.id) }) { Text("View in Patterns") }
+                            FlowRow(
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                OutlinedButton(onClick = { form = MedicineForm.Change }) { Text("Record change") }
+                                if (course.ended) {
+                                    OutlinedButton(onClick = { form = MedicineForm.Restart }) { Text("Restart medication") }
+                                } else {
+                                    OutlinedButton(onClick = { form = MedicineForm.Stop }) { Text("Record stop date") }
+                                }
+                                OutlinedButton(onClick = { form = MedicineForm.Course }) { Text("Correct course details") }
+                                OutlinedButton(onClick = { onPatterns(course.id) }) { Text("View in Patterns") }
+                            }
                         }
                     }
                 }
@@ -126,7 +141,10 @@ private fun MedicineEditor(
     if (courseFields) {
         MedicineTextField("Medication name", name) { name = it }
         MedicineDate("Start date", start) { start = it }
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
             FilterChip(!ended, { ended = false }, { Text("Ongoing") })
             FilterChip(ended, { ended = true }, { Text("Already stopped") })
         }
@@ -155,8 +173,11 @@ private fun MedicineEditor(
                 unitEdited = true
             }
         }
-        Text("Schedule", style = MaterialTheme.typography.titleMedium)
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text("Schedule", Modifier.padding(top = 8.dp), style = MaterialTheme.typography.titleMedium)
+        FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
             listOf(null, "Morning", "Evening", "Morning and evening", "As needed").forEach { option ->
                 FilterChip(schedule == option, { schedule = option }, { Text(option ?: "Unknown") })
             }
@@ -179,7 +200,11 @@ private fun MedicineEditor(
         else -> null
     }
     error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
-    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+    FlowRow(
+        modifier = Modifier.padding(top = 8.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp)
+    ) {
         Button(enabled = error == null && (!courseFields || name.isNotBlank()) &&
             (form != MedicineForm.Change || effective != null), onClick = {
             val updated = when {
@@ -224,11 +249,16 @@ private fun MedicineTextField(label: String, value: String, change: (String) -> 
 @Composable
 private fun MedicineDate(label: String, date: String?, optional: Boolean = true, change: (String?) -> Unit) {
     val context = LocalContext.current
-    Text(label, style = MaterialTheme.typography.titleMedium)
-    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        OutlinedButton(onClick = { chooseDiaryDate(context, date ?: LocalDate.now().toString()) { change(it) } }) {
-            Text(displayDate(date))
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Text(label, style = MaterialTheme.typography.titleMedium)
+        FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            OutlinedButton(onClick = { chooseDiaryDate(context, date ?: LocalDate.now().toString()) { change(it) } }) {
+                Text(displayDate(date))
+            }
+            if (optional && date != null) OutlinedButton(onClick = { change(null) }) { Text("Date unknown") }
         }
-        if (optional && date != null) OutlinedButton(onClick = { change(null) }) { Text("Date unknown") }
     }
 }

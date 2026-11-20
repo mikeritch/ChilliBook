@@ -211,14 +211,14 @@ private fun DiaryHome(vm: DiaryViewModel, localDay: String, target: ReminderTarg
                             SaveNotice(vm.status, vm::retry)
                         }
                         detail != null && editing -> holder.SaveableStateProvider("edit-${detail}") {
-                            TodayScreen(diary,detail!!,editSlot,{detail=it},{editSlot=it},{ change -> vm.editCheckIn(detail, change) },vm.status,vm::retry) { medications = true }
+                            TodayScreen(diary,saved,detail!!,editSlot,{detail=it},{editSlot=it},{ change -> vm.editCheckIn(detail, change) },vm.status,vm::retry) { medications = true }
                         }
                         detail != null -> holder.SaveableStateProvider("day-${detail}") {
                             DateDetail(diary, detail!!) { editSlot = it; editing = true }
                         }
                         else -> holder.SaveableStateProvider(if (tab == "Today") "Today-$todayVisit" else if (tab == "Patterns") "Patterns-$patternVisit" else tab) {
                             when (tab) {
-                                "Today" -> TodayScreen(diary,date,slot,{date=it},{slot=it},{ change -> vm.editCheckIn(date, change) },vm.status,vm::retry) { medications = true }
+                                "Today" -> TodayScreen(diary,saved,date,slot,{date=it},{slot=it},{ change -> vm.editCheckIn(date, change) },vm.status,vm::retry) { medications = true }
                                 "History" -> HistoryScreen(diary, { medications = true }) { detail=it }
                                 else -> PatternsScreen(diary,{detail=it},{tab="Today"; date=LocalDate.now().toString()}, medTarget)
                             }

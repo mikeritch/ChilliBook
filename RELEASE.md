@@ -7,7 +7,7 @@
 **Over USB.** Enable USB debugging and authorise the computer on the phone. Place the signed APK beside [Install ChilliBook.command](<release/Install ChilliBook.command>) and double-click the command on macOS. With Android SDK Platform-Tools on your path, you can also run the following from the project root.
 
 ```sh
-adb -d install -r release/ChilliBook-1.11.apk
+adb -d install -r release/ChilliBook-1.12.apk
 ```
 
 ## Back up or move the diary
@@ -26,12 +26,18 @@ Choose **Settings → Back up diary** and select a private destination. The JSON
 apk=app/build/outputs/apk/release/app-release.apk
 apksigner verify --print-certs "$apk"
 aapt dump badging "$apk" | head -1
-version=1.11  # set to the version you just built
+version=1.12  # set to the version you just built
 cp "$apk" "release/ChilliBook-$version.apk"
 git tag "v$version"
 git push origin HEAD "v$version"
 gh release create "v$version" "release/ChilliBook-$version.apk" --verify-tag --generate-notes --latest
 ```
+
+## Release 1.12
+
+Today shows **Saved** or **No entry** under Morning and Evening independently. History shows **Recorded** when a slot has an answer and its energy rating is blank. The History filters, Settings groups, medication editor and Patterns comparisons have more space around related controls.
+
+Emulator checks verified both slots after reopening without an energy rating, History search and clear, and layout at 200% text. The signed 1.11 → 1.12 upgrade preserved every record and preference in the synthetic diary. [History at 200% text](verification/1.12/history-large.png)
 
 ## Release 1.11
 

@@ -20,7 +20,7 @@ import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun TodayScreen(diary: Diary, date: String, slot: String, onDate: (String) -> Unit,
+internal fun TodayScreen(diary: Diary, saved: Diary, date: String, slot: String, onDate: (String) -> Unit,
                 onSlot: (String) -> Unit, edit: ((Diary) -> Diary) -> Unit, status: String, retry: () -> Unit, manageMedication: () -> Unit) {
     val morning = slot == "am"
     val day = diary.days.find { it.date == date }
@@ -33,7 +33,7 @@ fun TodayScreen(diary: Diary, date: String, slot: String, onDate: (String) -> Un
             TitleArt(title, slot)
             CheckInDateSelector(date) { chooseDiaryDate(context, date, chosen = onDate) }
             Spacer(Modifier.height(14.dp))
-            SlotSwitch(slot, onSlot)
+            SlotSwitch(slot, onSlot) { saved.answeredReminder(date, it) }
             Spacer(Modifier.height(22.dp))
             val energyQuestion = "How much energy do you have now?"
             QuestionText(energyQuestion)
@@ -99,19 +99,26 @@ internal fun SaveNotice(status: String, retry: () -> Unit, modifier: Modifier = 
 }
 
 @Composable
-private fun SlotSwitch(slot: String, choose: (String) -> Unit) {
+private fun SlotSwitch(slot: String, choose: (String) -> Unit, recorded: (String) -> Boolean) {
     val shape = RoundedCornerShape(28.dp)
     val colors = MaterialTheme.colorScheme
     Row(Modifier.fillMaxWidth().clip(shape).background(colors.surfaceVariant).padding(2.dp)) {
         listOf("am" to "☼  Morning", "pm" to "☾  Evening").forEach { (key, label) ->
             val selected = key == slot
             val name = if (key == "am") "Morning" else "Evening"
-            Box(Modifier.weight(1f).clip(shape)
+            val saved = recorded(key)
+            val summary = if (saved) "Saved" else "No entry"
+            Column(Modifier.weight(1f).clip(shape)
                 .then(if (selected) Modifier.background(colors.surface).border(1.5.dp, colors.primary, shape) else Modifier)
-                .selectable(selected, role = Role.Tab) { choose(key) }.semantics { contentDescription = "$name check-in" }.heightIn(min = 48.dp).padding(4.dp),
-                contentAlignment = Alignment.Center) {
+                .selectable(selected, role = Role.Tab) { choose(key) }
+                .semantics { contentDescription = "$name check-in"
+                    stateDescription = summary }
+                .heightIn(min = 60.dp).padding(horizontal = 6.dp, vertical = 8.dp),
+                verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
                 Text(if (LocalDensity.current.fontScale >= 1.5f) name else label, color = if (selected) colors.primary else colors.onSurfaceVariant,
                     fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal)
+                Text(summary, style = MaterialTheme.typography.labelSmall,
+                    color = if (saved) colors.primary else colors.onSurfaceVariant)
             }
         }
     }
@@ -137,7 +144,10 @@ internal fun YesNoRow(question: String, answer: Boolean?, tag: String, choose: (
             Text(question, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
         }
     }
-    if (scale > 1.3f) Column { label(); Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) { Buttons() } }
+    if (scale > 1.3f) Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        label()
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) { Buttons() }
+    }
     else Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
         Box(Modifier.weight(1f)) { label() }
         Buttons()

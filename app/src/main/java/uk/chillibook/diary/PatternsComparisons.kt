@@ -61,7 +61,7 @@ internal fun ActivityComparisonCard(index: PatternIndex, start: LocalDate, end: 
     if (matrix.isEmpty()) Text("No activities recorded in this period.")
     else BoxWithConstraints(Modifier.fillMaxWidth()) {
         val stacked = maxWidth < 280.dp || LocalDensity.current.fontScale > 1.25f
-        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Column(verticalArrangement = Arrangement.spacedBy(if (stacked) 14.dp else 6.dp)) {
             if (!stacked) Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                 Spacer(Modifier.weight(1.25f))
                 for (period in periods) Text(period, Modifier.weight(1f), textAlign = TextAlign.Center,
@@ -72,9 +72,11 @@ internal fun ActivityComparisonCard(index: PatternIndex, start: LocalDate, end: 
                 val groups = matrix.getValue(key)
                 val select: (Int) -> Unit = { lag = it; activity = key }
                 if (stacked) {
-                    Text(name, style = MaterialTheme.typography.titleSmall)
-                    groups.forEachIndexed { i, group ->
-                        ActivityTile(name, i, group, Modifier.fillMaxWidth(), true) { select(i) }
+                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Text(name, style = MaterialTheme.typography.titleSmall)
+                        groups.forEachIndexed { i, group ->
+                            ActivityTile(name, i, group, Modifier.fillMaxWidth(), true) { select(i) }
+                        }
                     }
                 } else Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                     Text(name, Modifier.weight(1.25f), style = MaterialTheme.typography.titleSmall)

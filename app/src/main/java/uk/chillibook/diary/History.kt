@@ -62,35 +62,42 @@ fun HistoryScreen(diary: Diary, manageMedication: () -> Unit, open: (String) -> 
     val matches = remember(diary, query) { historyMatches(diary, query) }
     val searchList = rememberLazyListState()
     val context = LocalContext.current
-    LazyColumn(state=if (query.isBlank()) list else searchList, modifier=Modifier.fillMaxSize(), contentPadding=PaddingValues(horizontal=20.dp)) {
+    LazyColumn(state=if (query.isBlank()) list else searchList, modifier=Modifier.fillMaxSize(),
+        contentPadding=PaddingValues(start=20.dp, end=20.dp, bottom=16.dp)) {
         item {
             TitleArt("History","history")
-            OutlinedButton(onClick = manageMedication) { Text("Medication history") }
-            Text("Find a symptom or activity", style=MaterialTheme.typography.bodyMedium)
-            OutlinedTextField(value=query, onValueChange={ query=it }, singleLine=true,
-                modifier=Modifier.fillMaxWidth().semantics { contentDescription = "Find a symptom or activity" },
-                placeholder={ Text("e.g. Headache or Commute") },
-                trailingIcon=if (query.isNotEmpty()) {
-                    { TextButton(onClick={ query="" }) { Text("Clear") } }
-                } else null)
-            if (query.isBlank()) {
-                OutlinedButton(onClick = {
-                    DatePickerDialog(context, { _, year, m, _ ->
-                        monthKey = YearMonth.of(year,m+1).toString()
-                        scope.launch { list.scrollToItem(0) }
-                    }, latest.year, latest.monthValue-1, latest.dayOfMonth).apply {
-                        datePicker.maxDate = System.currentTimeMillis()
-                    }.show()
-                }, modifier = Modifier.heightIn(min = 48.dp)) {
-                    Text(month.atDay(1).label("MMMM yyyy") + "   ⌄")
+            Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                OutlinedButton(onClick = manageMedication) { Text("Medication history") }
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text("Find a symptom or activity", style = MaterialTheme.typography.bodyMedium)
+                    OutlinedTextField(value=query, onValueChange={ query=it }, singleLine=true,
+                        modifier=Modifier.fillMaxWidth().semantics { contentDescription = "Find a symptom or activity" },
+                        placeholder={ Text("e.g. Headache or Commute") },
+                        trailingIcon=if (query.isNotEmpty()) {
+                            { TextButton(onClick={ query="" }) { Text("Clear") } }
+                        } else null)
+                }
+                if (query.isBlank()) {
+                    OutlinedButton(onClick = {
+                        DatePickerDialog(context, { _, year, m, _ ->
+                            monthKey = YearMonth.of(year,m+1).toString()
+                            scope.launch { list.scrollToItem(0) }
+                        }, latest.year, latest.monthValue-1, latest.dayOfMonth).apply {
+                            datePicker.maxDate = System.currentTimeMillis()
+                        }.show()
+                    }, modifier = Modifier.heightIn(min = 48.dp)) {
+                        Text(month.atDay(1).label("MMMM yyyy") + "   ⌄")
+                    }
                 }
             }
         }
         if (query.isNotBlank()) {
-            if (matches.isEmpty()) item { Text("No matching dates.", Modifier.padding(vertical=16.dp)) }
+            item { Spacer(Modifier.height(16.dp)) }
+            if (matches.isEmpty()) item { Text("No matching dates.") }
             items(matches, key={ it.date }) { match ->
                 Column(Modifier.fillMaxWidth().clickable(role=Role.Button) { open(match.date) }
-                    .heightIn(min=64.dp).padding(vertical=10.dp)) {
+                    .heightIn(min=64.dp).padding(vertical=12.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Text(LocalDate.parse(match.date).label("EEEE, d MMM yyyy"), fontWeight=FontWeight.SemiBold)
                     Text(match.labels.joinToString(" · "), color=MaterialTheme.colorScheme.onSurfaceVariant)
                 }
@@ -101,10 +108,13 @@ fun HistoryScreen(diary: Diary, manageMedication: () -> Unit, open: (String) -> 
             val monday = date.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY))
             if (date == latest || date.dayOfWeek == DayOfWeek.SUNDAY) item(key="week-$monday") {
                 Text(when(monday) { weekStart -> "This week"; weekStart.minusWeeks(1) -> "Last week"; else -> "Week of " + monday.label("d MMM") },
-                    Modifier.padding(top=20.dp,bottom=8.dp),fontSize=18.sp,fontWeight=FontWeight.SemiBold)
+                    Modifier.padding(top=24.dp,bottom=8.dp).semantics { heading() },fontSize=18.sp,fontWeight=FontWeight.SemiBold)
                 HorizontalDivider()
             }
-            item(key=date.toString()) { HistoryRow(diary,date) { open(date.toString()) } }
+            item(key=date.toString()) {
+                HistoryRow(diary,date) { open(date.toString()) }
+                HorizontalDivider()
+            }
         }
     }
 }
@@ -119,7 +129,8 @@ private fun HistoryRow(diary: Diary,date: LocalDate, open: () -> Unit) {
     val categories = categoryTags.keys.filter { activityFlag(day,activities,it) == true }
     val colors = MaterialTheme.colorScheme
     Row(Modifier.fillMaxWidth().clickable(role=Role.Button,onClick=open).heightIn(min=80.dp)
-        .padding(vertical=10.dp),verticalAlignment=Alignment.CenterVertically) {
+        .padding(vertical=12.dp),horizontalArrangement=Arrangement.spacedBy(8.dp),
+        verticalAlignment=Alignment.CenterVertically) {
         Column(Modifier.widthIn(min=54.dp)) {
             Text(date.label("EEE"),fontSize=13.sp,color=colors.onSurfaceVariant)
             Text(date.dayOfMonth.toString(),fontSize=25.sp,fontFamily=FontFamily.Serif)
@@ -128,29 +139,34 @@ private fun HistoryRow(diary: Diary,date: LocalDate, open: () -> Unit) {
             if (checks.isEmpty() && day == null && activities.isEmpty() && medicineNames.isEmpty()) Text("No entry",color=colors.onSurfaceVariant)
             else {
                 @Composable fun SlotLabel(slot:String) {
-                    val level = checks.find { it.slot == slot }?.energy?.let(energyLabels::get) ?: "—"
+                    val energy = checks.find { it.slot == slot }?.energy?.let(energyLabels::get)
+                    val recorded = energy != null || diary.answeredReminder(key, slot)
+                    val status = energy ?: if (recorded) "Recorded" else "—"
+                    val spokenStatus = energy ?: if (recorded) "Check-in saved" else "No check-in"
                     val morning = slot == "am"
-                    Row(Modifier.clearAndSetSemantics { contentDescription = (if(morning) "Morning" else "Evening") + ", " + (if(level == "—") "No energy entry" else level) },
-                        verticalAlignment=Alignment.CenterVertically) {
-                        Text(if(morning) "☼ " else "☾ ",color=if(morning) colors.primary else colors.tertiary)
-                        Text(level,style=MaterialTheme.typography.bodyMedium,fontWeight=FontWeight.Medium)
+                    val slotName = if (morning) "Morning" else "Evening"
+                    Row(Modifier.clearAndSetSemantics { contentDescription = "$slotName, $spokenStatus" },
+                        horizontalArrangement=Arrangement.spacedBy(4.dp),verticalAlignment=Alignment.CenterVertically) {
+                        Text(if(morning) "☼" else "☾",color=if(morning) colors.primary else colors.tertiary)
+                        Text(status,style=MaterialTheme.typography.bodyMedium,fontWeight=FontWeight.Medium)
                     }
                 }
                 if (LocalDensity.current.fontScale > 1.35f) { SlotLabel("am"); SlotLabel("pm") }
-                else Row(Modifier.fillMaxWidth()) {
+                else Row(Modifier.fillMaxWidth(), horizontalArrangement=Arrangement.spacedBy(8.dp)) {
                     Box(Modifier.weight(1f)) { SlotLabel("am") }; Box(Modifier.weight(1f)) { SlotLabel("pm") }
                 }
                 val labels = (medicineNames + categories + activities.flatMap { it.tags } +
                     listOfNotNull("No rests or naps".takeIf { restRecorded(day, activities) == false })).distinct()
-                if (labels.isNotEmpty()) Row(verticalAlignment=Alignment.CenterVertically) {
+                if (labels.isNotEmpty()) Row(horizontalArrangement=Arrangement.spacedBy(6.dp),
+                    verticalAlignment=Alignment.CenterVertically) {
                     val icon = when(categories.firstOrNull()) { "Work" -> R.drawable.work_bag; "Socialising" -> R.drawable.cups; "Household" -> R.drawable.house; else -> R.drawable.symbook }
                     Icon(painterResource(icon),null,Modifier.size(16.dp),tint=colors.onSurfaceVariant)
-                    Text("  "+labels.joinToString(" · "),style=MaterialTheme.typography.bodySmall,color=colors.onSurfaceVariant)
+                    Text(labels.joinToString(" · "),style=MaterialTheme.typography.bodySmall,color=colors.onSurfaceVariant)
                 }
 
             }
         }
-        Text("›",Modifier.padding(start=6.dp),color=colors.onSurfaceVariant)
+        Text("›",color=colors.onSurfaceVariant)
     }
 
 }
@@ -168,17 +184,17 @@ fun DateDetail(diary: Diary,date: String,edit:(String)->Unit) {
         if (checks.isEmpty() && day == null && activities.isEmpty() && diary.doses.none { it.date == date }) Text("No entry")
         val largeType = LocalDensity.current.fontScale > 1.35f
         for ((slot, label) in listOf("am" to "Morning","pm" to "Evening")) {
-            Spacer(Modifier.height(8.dp))
-            Row(verticalAlignment=Alignment.CenterVertically) {
+            Spacer(Modifier.height(12.dp))
+            Row(horizontalArrangement=Arrangement.spacedBy(8.dp), verticalAlignment=Alignment.CenterVertically) {
                 Icon(painterResource(if (slot == "am") R.drawable.diary_sun else R.drawable.diary_moon), null,
-                    Modifier.padding(end=8.dp).size(28.dp), tint=androidx.compose.ui.graphics.Color.Unspecified)
+                    Modifier.size(28.dp), tint=androidx.compose.ui.graphics.Color.Unspecified)
                 Text(label,Modifier.weight(1f),fontSize=22.sp,fontFamily=FontFamily.Serif)
                 if (!largeType) OutlinedButton(onClick = { edit(slot) }) { Text("Edit " + label.lowercase()) }
             }
             if (largeType) OutlinedButton(onClick = { edit(slot) }) { Text("Edit " + label.lowercase()) }
             val check = checks.find { it.slot == slot }
-            Text("Energy · " + (check?.energy?.let(energyLabels::get) ?: "No entry"))
-            if (slot == "am") Text("Waking refreshment · " + (check?.sleep?.let(sleepLabels::get) ?: "No entry"))
+            Text("Energy · " + (check?.energy?.let(energyLabels::get) ?: "Not recorded"))
+            if (slot == "am") Text("Waking refreshment · " + (check?.sleep?.let(sleepLabels::get) ?: "Not recorded"))
             for ((name, value) in check?.symptoms.orEmpty()) Text("$name · ${symptomRatingLabel(value)}")
             diary.courses.forEach { course ->
                 val actual = diary.doses.filter { it.courseId == course.id && it.date == date && it.slot == slot }
