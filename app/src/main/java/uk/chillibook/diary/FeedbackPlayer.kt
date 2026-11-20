@@ -8,6 +8,7 @@ import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
+import android.provider.Settings
 import android.view.HapticFeedbackConstants
 import android.view.View
 
@@ -53,10 +54,10 @@ internal class FeedbackPlayer(context: Context) : AutoCloseable {
     private var secondPulse: Runnable? = null
     private var closed = false
 
-    fun play(view: View, cue: FeedbackCue, sound: Boolean, haptic: Boolean) {
-        if (closed) return
+    fun play(view: View, cue: FeedbackCue, sound: Boolean, haptic: Boolean): Boolean {
+        if (closed) return false
         stop()
-        if (!view.canProvideFeedback()) return
+        if (!view.canProvideFeedback()) return false
         if (sound && canPlaySound()) {
             val sampleId = samples.getValue(cue)
             if (sampleId in readySamples) {
@@ -65,19 +66,28 @@ internal class FeedbackPlayer(context: Context) : AutoCloseable {
                 pendingSound = PendingSound(sampleId, view, SystemClock.uptimeMillis() + 150L)
             }
         }
-        if (!haptic) return
-        val lightTick = if (Build.VERSION.SDK_INT >= 34) HapticFeedbackConstants.SEGMENT_FREQUENT_TICK
-            else HapticFeedbackConstants.CLOCK_TICK
-        val tick = if (cue == FeedbackCue.Clear) lightTick else HapticFeedbackConstants.KEYBOARD_TAP
-        val vibrated = view.performHapticFeedback(tick)
-        if (cue == FeedbackCue.Celebrate && vibrated) {
+        if (!haptic || !view.touchFeedbackEnabled()) return false
+
+        val primary = when (cue) {
+            FeedbackCue.Select -> HapticFeedbackConstants.VIRTUAL_KEY
+            FeedbackCue.Clear -> HapticFeedbackConstants.CONTEXT_CLICK
+            FeedbackCue.Celebrate -> if (Build.VERSION.SDK_INT >= 30) HapticFeedbackConstants.CONFIRM
+                else HapticFeedbackConstants.VIRTUAL_KEY
+        }
+        val accepted = view.performHapticFeedback(primary) ||
+            (primary != HapticFeedbackConstants.VIRTUAL_KEY &&
+                view.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY))
+        if (cue == FeedbackCue.Celebrate && accepted) {
             val pulse = Runnable {
                 secondPulse = null
-                if (view.canProvideFeedback()) view.performHapticFeedback(lightTick)
+                if (view.canProvideFeedback() && view.touchFeedbackEnabled()) {
+                    view.performHapticFeedback(HapticFeedbackConstants.CONTEXT_CLICK)
+                }
             }
             secondPulse = pulse
-            handler.postDelayed(pulse, 90L)
+            handler.postDelayed(pulse, 150L)
         }
+        return accepted
     }
 
     fun stop() {
@@ -98,6 +108,11 @@ internal class FeedbackPlayer(context: Context) : AutoCloseable {
 
     private fun View.canProvideFeedback(): Boolean = isAttachedToWindow && isShown &&
         windowVisibility == View.VISIBLE && hasWindowFocus()
+
+    // Some Android versions report the request as sent even when touch feedback is off.
+    @Suppress("DEPRECATION")
+    private fun View.touchFeedbackEnabled(): Boolean =
+        Settings.System.getInt(context.contentResolver, Settings.System.HAPTIC_FEEDBACK_ENABLED, 1) != 0
 
     private fun canPlaySound(): Boolean {
         val manager = audioManager ?: return false

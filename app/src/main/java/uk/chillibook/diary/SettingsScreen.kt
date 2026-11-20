@@ -27,7 +27,7 @@ internal fun SettingsScreen(
     status: String, retry: () -> Unit, onClose: () -> Unit, reset: () -> Unit, resetting: Boolean,
     feedbackEnabled: Set<FeedbackOption>,
     onFeedbackChanged: (FeedbackOption, Boolean) -> Unit,
-    previewFeedback: (FeedbackOption) -> Unit,
+    previewFeedback: (FeedbackOption) -> Boolean,
     refreshReminders: () -> Unit,
 ) {
     val resolver = LocalContext.current.contentResolver
@@ -130,6 +130,7 @@ internal fun SettingsScreen(
                 Text(status, Modifier.semantics { liveRegion = LiveRegionMode.Polite })
             }
         }
+        SupportSettings()
     }
 
     if (resetStep != 0) {

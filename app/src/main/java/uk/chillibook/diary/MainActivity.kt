@@ -124,13 +124,13 @@ private fun DiaryHome(vm: DiaryViewModel, localDay: String, target: ReminderTarg
             }
         }
     }
-    fun preview(option: FeedbackOption) {
+    fun preview(option: FeedbackOption): Boolean {
         val cue = when (option) {
             FeedbackOption.EverydaySound, FeedbackOption.EverydayHaptics -> FeedbackCue.Select
             FeedbackOption.CelebrationSound, FeedbackOption.CelebrationHaptics -> FeedbackCue.Celebrate
         }
         val sound = option == FeedbackOption.EverydaySound || option == FeedbackOption.CelebrationSound
-        player.play(view, cue, sound = sound, haptic = !sound)
+        return player.play(view, cue, sound = sound, haptic = !sound)
     }
     var tab by rememberSaveable { mutableStateOf("Today") }
     var medications by rememberSaveable { mutableStateOf(false) }

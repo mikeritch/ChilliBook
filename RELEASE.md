@@ -7,7 +7,7 @@
 **Over USB.** Enable USB debugging and authorise the computer on the phone. Place the signed APK beside [Install ChilliBook.command](<release/Install ChilliBook.command>) and double-click the command on macOS. With Android SDK Platform-Tools on your path, you can also run the following from the project root.
 
 ```sh
-adb -d install -r release/ChilliBook-1.13.apk
+adb -d install -r release/ChilliBook-1.13.1.apk
 ```
 
 ## Back up or move the diary
@@ -26,12 +26,18 @@ Choose **Settings → Back up diary** and select a private destination. The JSON
 apk=app/build/outputs/apk/release/app-release.apk
 apksigner verify --print-certs "$apk"
 aapt dump badging "$apk" | head -1
-version=1.13  # set to the version you just built
+version=1.13.1  # set to the version you just built
 cp "$apk" "release/ChilliBook-$version.apk"
 git tag "v$version"
 git push origin HEAD "v$version"
 gh release create "v$version" "release/ChilliBook-$version.apk" --verify-tag --generate-notes --latest
 ```
+
+## Release 1.13.1
+
+Haptic previews and diary actions use Android’s standard touch and confirmation effects. If Android rejects a preview, ChilliBook points to **Touch feedback** and offers a shortcut to Android sound and vibration settings.
+
+The **A little kindness** section in Settings opens the developer’s Ko-fi and the Action for M.E. donation page on PayPal.
 
 ## Release 1.13
 
