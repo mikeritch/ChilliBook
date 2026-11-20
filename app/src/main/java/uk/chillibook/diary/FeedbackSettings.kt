@@ -2,6 +2,7 @@ package uk.chillibook.diary
 
 import android.content.ActivityNotFoundException
 import android.content.Intent
+import android.os.Build
 import android.provider.Settings
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -32,6 +33,13 @@ import androidx.compose.ui.unit.dp
 internal enum class FeedbackOption {
     EverydaySound, EverydayHaptics, CelebrationSound, CelebrationHaptics
 }
+
+private val hapticSettingName: String
+    get() = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+        "Media vibration"
+    } else {
+        "Touch feedback"
+    }
 
 @Composable
 internal fun FeedbackSettings(
@@ -74,14 +82,16 @@ private fun AndroidFeedbackSettings() {
         ) {
             Text("Android sound & vibration settings")
         }
-        if (openFailed) {
-            Text(
-                "Open Android Settings and look for Touch feedback.",
-                modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
+        Text(
+            if (openFailed) {
+                "Open Android Settings and look for $hapticSettingName."
+            } else {
+                "Haptics follow Android’s $hapticSettingName setting."
+            },
+            modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
     }
 }
 
@@ -104,7 +114,7 @@ private fun FeedbackGroup(
         }
         if (hapticPreviewRejected) {
             Text(
-                "Android couldn’t play this preview. Check Touch feedback.",
+                "Haptic preview unavailable. Check $hapticSettingName in Android Settings.",
                 modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,

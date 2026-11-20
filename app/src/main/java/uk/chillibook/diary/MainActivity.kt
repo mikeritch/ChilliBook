@@ -130,7 +130,7 @@ private fun DiaryHome(vm: DiaryViewModel, localDay: String, target: ReminderTarg
             FeedbackOption.CelebrationSound, FeedbackOption.CelebrationHaptics -> FeedbackCue.Celebrate
         }
         val sound = option == FeedbackOption.EverydaySound || option == FeedbackOption.CelebrationSound
-        return player.play(view, cue, sound = sound, haptic = !sound)
+        return player.play(view, cue, sound = sound, haptic = !sound, preview = true)
     }
     var tab by rememberSaveable { mutableStateOf("Today") }
     var medications by rememberSaveable { mutableStateOf(false) }

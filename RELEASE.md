@@ -7,7 +7,7 @@
 **Over USB.** Enable USB debugging and authorise the computer on the phone. Place the signed APK beside [Install ChilliBook.command](<release/Install ChilliBook.command>) and double-click the command on macOS. With Android SDK Platform-Tools on your path, you can also run the following from the project root.
 
 ```sh
-adb -d install -r release/ChilliBook-1.13.1.apk
+adb -d install -r release/ChilliBook-1.13.2.apk
 ```
 
 ## Back up or move the diary
@@ -26,12 +26,18 @@ Choose **Settings → Back up diary** and select a private destination. The JSON
 apk=app/build/outputs/apk/release/app-release.apk
 apksigner verify --print-certs "$apk"
 aapt dump badging "$apk" | head -1
-version=1.13.1  # set to the version you just built
+version=1.13.2  # set to the version you just built
 cp "$apk" "release/ChilliBook-$version.apk"
 git tag "v$version"
 git push origin HEAD "v$version"
 gh release create "v$version" "release/ChilliBook-$version.apk" --verify-tag --generate-notes --latest
 ```
+
+## Release 1.13.2
+
+Everyday sounds vary in tone and pitch, and completing the day plays a four-note melody. On Android 13 and later, everyday and celebration haptics use **Media vibration**. Older Android versions use **Touch feedback**. Each effect has its own switch and preview in Settings.
+
+The emulator played both haptic previews with Touch feedback off and suppressed them with Media vibration off. The signed update preserved the synthetic diary. [Feedback settings at 200% text](verification/1.13.2/media-haptics-large.png)
 
 ## Release 1.13.1
 
