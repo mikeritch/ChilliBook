@@ -191,7 +191,7 @@ internal class FeedbackPlayer(context: Context) : AutoCloseable {
         val candidates = available.filterNot { it == lastEverydaySample }.ifEmpty { available }
         val sampleId = candidates.randomOrNull() ?: return null
         val celebration = cue == FeedbackCue.Celebrate
-        val rate = if (celebration) 1f else Random.nextDouble(0.965, 1.035).toFloat()
+        val rate = if (celebration) 1f else Random.nextDouble(0.996, 1.004).toFloat()
         return Sound(sampleId, rate, celebration)
     }
 
