@@ -55,13 +55,16 @@ internal fun Diary.checkInStreak(date: String, today: String): Int {
     return count
 }
 
+internal data class DayCompletion(val date: String, val streak: Int)
+internal data class DayBloom(val progress: Animatable<Float, AnimationVector1D>, val streak: Int)
+
 @Composable
-internal fun rememberDayCelebration(date: String?, completions: Flow<String>): Animatable<Float, AnimationVector1D>? {
-    var animation by remember(date) { mutableStateOf<Animatable<Float, AnimationVector1D>?>(null) }
+internal fun rememberDayCelebration(date: String?, completions: Flow<DayCompletion>): DayBloom? {
+    var animation by remember(date) { mutableStateOf<DayBloom?>(null) }
     LaunchedEffect(date, completions) {
-        if (date != null) completions.filter { it == date }.collectLatest {
+        if (date != null) completions.filter { it.date == date }.collectLatest { completion ->
             val progress = Animatable(0f)
-            animation = progress
+            animation = DayBloom(progress, completion.streak)
             try {
                 progress.animateTo(1f, tween(4400, easing = LinearEasing))
             } finally {

@@ -22,9 +22,13 @@ import java.io.InputStreamReader
 import java.time.LocalDate
 
 @Composable
-fun SettingsScreen(
+internal fun SettingsScreen(
     diary: Diary, edit: ((Diary) -> Diary) -> Unit, restore: (Diary) -> Unit,
-    status: String, retry: () -> Unit, onClose: () -> Unit, reset: () -> Unit, resetting: Boolean
+    status: String, retry: () -> Unit, onClose: () -> Unit, reset: () -> Unit, resetting: Boolean,
+    feedbackEnabled: Set<FeedbackOption>,
+    onFeedbackChanged: (FeedbackOption, Boolean) -> Unit,
+    previewFeedback: (FeedbackOption) -> Unit,
+    refreshReminders: () -> Unit,
 ) {
     val resolver = LocalContext.current.contentResolver
     val scope = rememberCoroutineScope()
@@ -91,8 +95,9 @@ fun SettingsScreen(
             }
             if (!status.contains("reset", ignoreCase = true)) SaveNotice(status, retry)
         }
+        FeedbackSettings(feedbackEnabled, onFeedbackChanged, previewFeedback)
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            ReminderSettings(diary.prefs, edit)
+            ReminderSettings(diary.prefs, edit, refreshReminders)
         }
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             UpdateSettings()

@@ -242,3 +242,11 @@ Separate the check-in date and slot controls. Group evening Context options belo
 Offer tablets as the default on new regimens and preserve custom and unknown units on older records. Support common units and a custom entry for both regimen editing and dose corrections. A name alone still saves a course without creating a regimen.
 
 A user-initiated verified download opens Android’s confirmation screen as soon as ChilliBook is in the foreground. If source permission is required, continue to the installer on return. A cancelled or failed verification must never open an installer.
+
+## Optional sound and haptic feedback
+
+Provide separate sound and haptic switches for everyday diary actions and the end-of-day celebration. Start all four off. Each preview plays its own cue or haptic without changing the switch. Save preferences on the device and return them to off on diary reset.
+
+Play the everyday cue after a diary edit succeeds. Give cleared answers a softer cue. When a saved edit earns a new bloom, use the celebration feedback once in place of the everyday cue. Reopening, switching slots and showing a saved streak stay quiet. Follow the device’s quiet settings and stop feedback when the app goes to the background.
+
+Grow the bloom and add more petals and sparkles at 3, 7 and 14 consecutive completed days. At 14 days and beyond, add a second wave of sparkles. Base the effect on the streak on the day that earned the bloom. Use Android’s standard alerting reminder channel unless the owner customized the original channel. Show the next scheduled date and time if available. Offer a test notification on the same channel that leaves scheduled reminders intact.

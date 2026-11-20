@@ -9,6 +9,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.launch
@@ -34,8 +35,24 @@ class DiaryViewModel(app: Application) : AndroidViewModel(app) {
         private set
     var status by mutableStateOf("")
         private set
-    private val completedDays = MutableSharedFlow<String>(extraBufferCapacity = 1)
-    val dayCompletions = completedDays.asSharedFlow()
+    private val completedDays = MutableSharedFlow<DayCompletion>(extraBufferCapacity = 1)
+    internal val dayCompletions = completedDays.asSharedFlow()
+    private val feedbackCues = MutableSharedFlow<FeedbackCue>(
+        extraBufferCapacity = 8, onBufferOverflow = BufferOverflow.DROP_OLDEST
+    )
+    internal val feedback = feedbackCues.asSharedFlow()
+    private val feedbackPrefs = app.getSharedPreferences("feedback", Context.MODE_PRIVATE)
+    internal var feedbackEnabled by mutableStateOf(
+        FeedbackOption.entries.filterTo(mutableSetOf()) { feedbackPrefs.getBoolean(it.name, false) }.toSet()
+    )
+        private set
+
+    internal fun setFeedback(option: FeedbackOption, enabled: Boolean) {
+        val next = if (enabled) feedbackEnabled + option else feedbackEnabled - option
+        feedbackPrefs.edit().putBoolean(option.name, enabled).apply()
+        openModels.forEach { it.feedbackEnabled = next }
+    }
+
     private val rewards = app.getSharedPreferences("day_rewards", Context.MODE_PRIVATE)
     var celebrationDay by mutableStateOf(rewards.getString(EARNED_ON, null))
         private set
@@ -62,6 +79,7 @@ class DiaryViewModel(app: Application) : AndroidViewModel(app) {
     private fun acceptReset(empty: Diary) {
         committed = empty
         diary = empty
+        feedbackEnabled = emptySet()
         pendingRestore = false
         pendingEditDate = null
         resetGeneration++
@@ -78,6 +96,7 @@ class DiaryViewModel(app: Application) : AndroidViewModel(app) {
                 val empty = Diary()
                 storage.replace(empty)
                 clearRewards()
+                feedbackPrefs.edit().clear().apply()
                 openModels.forEach { it.acceptReset(empty) }
                 try {
                     Reminders.clear(getApplication())
@@ -118,13 +137,17 @@ class DiaryViewModel(app: Application) : AndroidViewModel(app) {
         DiaryOperations.enqueue {
             if (generation != resetGeneration) return@enqueue
             try {
-                if (replace) storage.replace(target) else storage.save(committed, target)
+                val before = committed
+                if (replace) storage.replace(target) else storage.save(before, target)
+                committed = target
                 if (replace) {
                     clearRewards()
-                } else if (editDate != null && newlyCompletedDay(committed, target, editDate)) {
-                    celebrate(editDate)
+                } else {
+                    val celebrated = editDate != null && newlyCompletedDay(before, target, editDate) &&
+                        celebrate(editDate)
+                    val cue = if (celebrated) FeedbackCue.Celebrate else diaryEditCue(before, target, editDate)
+                    cue?.let(feedbackCues::tryEmit)
                 }
-                committed = target
                 refreshReminders()
                 if (revision == writeRevision) {
                     status = if (replace) "Diary restored" else "Saved"
@@ -137,16 +160,17 @@ class DiaryViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    private fun celebrate(entryDate: String) {
+    private fun celebrate(entryDate: String): Boolean {
         val entryKey = "completed_$entryDate"
         val earnedOn = LocalDate.now().toString()
         val sameDay = rewards.getString(EARNED_ON, null) == earnedOn
-        if (sameDay && rewards.contains(entryKey)) return
+        if (sameDay && rewards.contains(entryKey)) return false
         val update = rewards.edit()
         if (!sameDay) update.clear()
         update.putBoolean(entryKey, true).putString(EARNED_ON, earnedOn).apply()
         openModels.forEach { it.celebrationDay = earnedOn }
-        completedDays.tryEmit(entryDate)
+        completedDays.tryEmit(DayCompletion(entryDate, committed.checkInStreak(entryDate, earnedOn)))
+        return true
     }
 
     private fun clearRewards() {

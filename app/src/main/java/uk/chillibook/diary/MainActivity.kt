@@ -22,6 +22,9 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.*
 import androidx.core.content.ContextCompat
 import androidx.core.view.WindowCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.repeatOnLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import java.time.LocalDate
 import java.time.LocalTime
@@ -100,6 +103,35 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 private fun DiaryHome(vm: DiaryViewModel, localDay: String, target: ReminderTarget?, consume: () -> Unit) {
+    val view = LocalView.current
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
+    val player = remember(view) { FeedbackPlayer(view.context) }
+    DisposableEffect(player) {
+        onDispose { player.close() }
+    }
+    LaunchedEffect(vm, player, lifecycle) {
+        lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
+            try {
+                vm.feedback.collect { cue ->
+                    val celebration = cue == FeedbackCue.Celebrate
+                    val enabled = vm.feedbackEnabled
+                    val sound = if (celebration) FeedbackOption.CelebrationSound else FeedbackOption.EverydaySound
+                    val haptics = if (celebration) FeedbackOption.CelebrationHaptics else FeedbackOption.EverydayHaptics
+                    player.play(view, cue, sound = sound in enabled, haptic = haptics in enabled)
+                }
+            } finally {
+                player.stop()
+            }
+        }
+    }
+    fun preview(option: FeedbackOption) {
+        val cue = when (option) {
+            FeedbackOption.EverydaySound, FeedbackOption.EverydayHaptics -> FeedbackCue.Select
+            FeedbackOption.CelebrationSound, FeedbackOption.CelebrationHaptics -> FeedbackCue.Celebrate
+        }
+        val sound = option == FeedbackOption.EverydaySound || option == FeedbackOption.CelebrationSound
+        player.play(view, cue, sound = sound, haptic = !sound)
+    }
     var tab by rememberSaveable { mutableStateOf("Today") }
     var medications by rememberSaveable { mutableStateOf(false) }
     var medTarget by rememberSaveable { mutableStateOf<String?>(null) }
@@ -182,7 +214,7 @@ private fun DiaryHome(vm: DiaryViewModel, localDay: String, target: ReminderTarg
                             date == localDay -> "Today"
                             else -> "Check-in"
                         },
-                        earned = earned, streak = streak, animation = celebration, modifier = Modifier.weight(1f)
+                        earned = earned, streak = streak, animation = celebration?.progress, modifier = Modifier.weight(1f)
                     )
                     if (!settings) IconButton(onClick = { settings = true }) {
                         Icon(painterResource(R.drawable.settings), "Settings", Modifier.size(21.dp))
@@ -195,7 +227,9 @@ private fun DiaryHome(vm: DiaryViewModel, localDay: String, target: ReminderTarg
                             Text(vm.status)
                             if (vm.status.startsWith("Couldn’t")) TextButton(onClick = vm::retry) { Text("Retry") }
                         }
-                        settings -> SettingsScreen(diary, vm::edit, vm::restore, vm.status, vm::retry, back, vm::reset, vm.resetting)
+                        settings -> SettingsScreen(diary, vm::edit, vm::restore, vm.status, vm::retry, back,
+                            vm::reset, vm.resetting, vm.feedbackEnabled, vm::setFeedback, ::preview,
+                            refreshReminders = vm::refreshReminders)
                         medications -> Column {
                             Box(Modifier.weight(1f)) {
                                 MedicationManagement(diary, vm::edit) { course ->
@@ -240,7 +274,7 @@ private fun DiaryHome(vm: DiaryViewModel, localDay: String, target: ReminderTarg
                 }
             }
             if (earned && celebration != null) {
-                DayCelebrationBurst({ celebration.value }, Modifier.matchParentSize())
+                DayCelebrationBurst({ celebration.progress.value }, celebration.streak, Modifier.matchParentSize())
             }
         }
     }

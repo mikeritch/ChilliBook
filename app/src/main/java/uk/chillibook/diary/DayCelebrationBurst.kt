@@ -14,7 +14,6 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.dp
 import kotlin.math.cos
 import kotlin.math.sin
-import kotlin.random.Random
 
 private val burstColors = listOf(
     Color(0xFFEAAF49), Color(0xFFE18BAA), Color(0xFF84BCA4),
@@ -45,62 +44,89 @@ private data class BurstPiece(
     val color: Color
 )
 
-// Stagger two evenly spaced waves and vary their reach without moving pieces between frames.
-private fun pieces(count: Int, seed: Int): List<BurstPiece> {
-    val random = Random(seed)
-    return List(count) { index ->
-        val angle = (index + random.nextFloat() * .65) * 2 * Math.PI / count
-        val reach = .27f + random.nextFloat() * .41f
+private data class BurstWave(
+    val pieces: List<BurstPiece>,
+    val start: Float,
+    val end: Float,
+    val isPetal: Boolean,
+    val scale: Float,
+)
+
+// Distribute each wave evenly around the flower, with fixed offsets for its stagger and reach.
+private fun wave(
+    count: Int,
+    start: Float,
+    end: Float,
+    isPetal: Boolean,
+    offset: Int,
+    scale: Float = 1f,
+): BurstWave {
+    val pieces = List(count) { index ->
+        fun variation(step: Int) = ((index * step + offset) % 101) / 101f
+        val angle = (index + variation(37) * .65) * 2 * Math.PI / count
+        val reach = .27f + variation(53) * .41f
         BurstPiece(
             Offset(cos(angle).toFloat(), sin(angle).toFloat()) * reach,
-            random.nextFloat() * .12f,
-            5f + random.nextFloat() * 7f,
-            (random.nextFloat() - .5f) * 380f,
-            burstColors[index % burstColors.size]
+            variation(47) * .12f,
+            5f + variation(71) * 7f,
+            (variation(59) - .5f) * 380f,
+            burstColors[(index + offset) % burstColors.size]
         )
     }
+    return BurstWave(pieces, start, end, isPetal, scale)
 }
 
-private val stars = pieces(28, 19)
-private val petals = pieces(50, 34)
+private fun flowerWaves(stars: Int, petals: Int) = listOf(
+    wave(stars, 0f, .65f, isPetal = false, offset = 19),
+    wave(petals, .19f, 1f, isPetal = true, offset = 34),
+)
+
+private val firstDayWaves = flowerWaves(28, 50)
+private val threeDayWaves = flowerWaves(30, 58)
+private val sevenDayWaves = flowerWaves(34, 66)
+private val fourteenDayWaves = flowerWaves(36, 74) +
+    wave(16, .39f, .9f, isPetal = false, offset = 79, scale = .72f)
 
 private fun ramp(value: Float, start: Float, end: Float) =
     ((value - start) / (end - start)).coerceIn(0f, 1f)
 
 @Composable
-internal fun DayCelebrationBurst(progress: () -> Float, modifier: Modifier) {
+internal fun DayCelebrationBurst(progress: () -> Float, streak: Int, modifier: Modifier) {
+    val (waves, bloomSize) = when {
+        streak >= 14 -> fourteenDayWaves to 164.dp
+        streak >= 7 -> sevenDayWaves to 152.dp
+        streak >= 3 -> threeDayWaves to 140.dp
+        else -> firstDayWaves to 128.dp
+    }
     Box(modifier, contentAlignment = Alignment.Center) {
         Canvas(Modifier.matchParentSize()) {
             val time = progress()
             if (time <= 0f || time >= 1f) return@Canvas
-            fun drawWave(pieces: List<BurstPiece>, isPetal: Boolean) {
-                val start = if (isPetal) .19f else 0f
-                val end = if (isPetal) 1f else .65f
-                for (piece in pieces) {
-                    val phase = ramp(time, start + piece.delay, end)
+            for (wave in waves) {
+                if (time <= wave.start || time >= wave.end) continue
+                for (piece in wave.pieces) {
+                    val phase = ramp(time, wave.start + piece.delay, wave.end)
                     if (phase <= 0f || phase >= 1f) continue
                     val travel = 1f - (1f - phase) * (1f - phase)
-                    val fall = if (isPetal) phase * phase * size.height * .14f else 0f
-                    val flutter = if (isPetal) sin(phase * 7f + piece.spin) * phase * 14.dp.toPx() else 0f
+                    val fall = if (wave.isPetal) phase * phase * size.height * .14f else 0f
+                    val flutter = if (wave.isPetal) sin(phase * 7f + piece.spin) * phase * 14.dp.toPx() else 0f
                     val x = center.x + piece.direction.x * size.width * travel + flutter
                     val y = center.y + piece.direction.y * size.height * travel + fall
-                    val radius = piece.radius.dp.toPx() * (.55f + .45f * travel)
+                    val radius = piece.radius.dp.toPx() * wave.scale * (.55f + .45f * travel)
                     val alpha = ramp(phase, 0f, .12f) * (1f - ramp(phase, .66f, 1f))
                     withTransform({
                         translate(x, y)
                         rotate(piece.spin * phase, Offset.Zero)
                         scale(radius, radius, Offset.Zero)
                     }) {
-                        drawPath(if (isPetal) petalShape else starShape, piece.color, alpha)
+                        drawPath(if (wave.isPetal) petalShape else starShape, piece.color, alpha)
                     }
                 }
             }
-            drawWave(stars, false)
-            drawWave(petals, true)
         }
         BloomingFlower(
             progress = { ramp(progress(), .02f, .29f) },
-            modifier = Modifier.size(128.dp).graphicsLayer {
+            modifier = Modifier.size(bloomSize).graphicsLayer {
                 val time = progress()
                 val growth = ramp(time, 0f, .25f)
                 scaleX = .42f + .58f * (1f - (1f - growth) * (1f - growth))

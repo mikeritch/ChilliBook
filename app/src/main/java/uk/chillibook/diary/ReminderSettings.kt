@@ -5,6 +5,7 @@ import android.app.NotificationManager
 import android.app.TimePickerDialog
 import android.content.Context
 import android.content.Intent
+import android.content.SharedPreferences
 import android.content.pm.PackageManager
 import android.os.Build
 import android.provider.Settings
@@ -24,15 +25,21 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import java.util.Calendar
+import java.util.Date
 
 @Composable
-internal fun ReminderSettings(prefs: Prefs, edit: DiaryEdit) {
+internal fun ReminderSettings(prefs: Prefs, edit: DiaryEdit, refreshReminders: () -> Unit) {
     val context = LocalContext.current
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     var allowed by remember { mutableStateOf(Reminders.allowed(context)) }
+    var testStatus by remember { mutableStateOf<String?>(null) }
+    val delivery = remember(context) { Reminders.state(context) }
+    var dueTimes by remember(context, prefs.morningReminder, prefs.eveningReminder) {
+        mutableStateOf(listOf(Reminders.due(context, prefs, "am"), Reminders.due(context, prefs, "pm")))
+    }
     val request = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {
         allowed = Reminders.allowed(context)
-        Reminders.reconcile(context, prefs)
+        refreshReminders()
     }
     DisposableEffect(context, lifecycle) {
         val observer = LifecycleEventObserver { _, event ->
@@ -41,8 +48,16 @@ internal fun ReminderSettings(prefs: Prefs, edit: DiaryEdit) {
         lifecycle.addObserver(observer)
         onDispose { lifecycle.removeObserver(observer) }
     }
+    DisposableEffect(delivery, prefs.morningReminder, prefs.eveningReminder) {
+        val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, _ ->
+            dueTimes = listOf(Reminders.due(context, prefs, "am"), Reminders.due(context, prefs, "pm"))
+        }
+        delivery.registerOnSharedPreferenceChangeListener(listener)
+        dueTimes = listOf(Reminders.due(context, prefs, "am"), Reminders.due(context, prefs, "pm"))
+        onDispose { delivery.unregisterOnSharedPreferenceChangeListener(listener) }
+    }
     Text("Check-in reminders", style = MaterialTheme.typography.titleLarge)
-    Text("Choose a local time. Android may deliver a reminder a little later.",
+    Text("Android may deliver reminders after the scheduled time.",
         style = MaterialTheme.typography.bodyMedium)
     for (morning in listOf(true, false)) {
         val label = if (morning) "Morning reminder" else "Evening reminder"
@@ -72,20 +87,31 @@ internal fun ReminderSettings(prefs: Prefs, edit: DiaryEdit) {
                 TimePickerDialog(context, { _, hour, minutes -> update(hour * 60 + minutes) },
                     minute / 60, minute % 60, DateFormat.is24HourFormat(context)).show()
             }) { Text("${if (morning) "Morning" else "Evening"} time · ${DateFormat.getTimeFormat(context).format(value.time)}") }
+            if (allowed) dueTimes[if (morning) 0 else 1]?.let { due ->
+                val pending = Date.from(due)
+                Text("Scheduled for ${DateFormat.getDateFormat(context).format(pending)} at ${DateFormat.getTimeFormat(context).format(pending)}",
+                    style = MaterialTheme.typography.bodySmall)
+            }
         }
     }
-    if (!allowed && (prefs.morningReminder != null || prefs.eveningReminder != null)) {
-        Text("Notifications are turned off in Android.", style = MaterialTheme.typography.bodyMedium)
+    if (prefs.morningReminder != null || prefs.eveningReminder != null) {
+        if (!allowed) Text("Notifications are turned off in Android.", style = MaterialTheme.typography.bodyMedium)
         OutlinedButton(onClick = { openReminderSettings(context) }) { Text("Android notification settings") }
+        OutlinedButton(enabled = allowed, onClick = {
+            val slot = if (prefs.morningReminder != null) "am" else "pm"
+            testStatus = if (Reminders.sendTest(context, slot)) "Test notification sent. Check the notification shade."
+                else "Couldn’t send a test notification."
+        }) { Text("Send test notification") }
+        if (allowed) testStatus?.let { Text(it, style = MaterialTheme.typography.bodyMedium) }
     }
 }
 
 private fun openReminderSettings(context: Context) {
     val manager = context.getSystemService(NotificationManager::class.java)
-    val channelBlocked = manager.areNotificationsEnabled() &&
-        manager.getNotificationChannel(Reminders.CHANNEL)?.importance == NotificationManager.IMPORTANCE_NONE
-    val intent = if (channelBlocked) Intent(Settings.ACTION_CHANNEL_NOTIFICATION_SETTINGS)
-        .putExtra(Settings.EXTRA_CHANNEL_ID, Reminders.CHANNEL)
+    val channel = Reminders.channelId(manager)
+    val hasChannel = manager.areNotificationsEnabled() && manager.getNotificationChannel(channel) != null
+    val intent = if (hasChannel) Intent(Settings.ACTION_CHANNEL_NOTIFICATION_SETTINGS)
+        .putExtra(Settings.EXTRA_CHANNEL_ID, channel)
     else Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS)
     context.startActivity(intent.putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName))
 }

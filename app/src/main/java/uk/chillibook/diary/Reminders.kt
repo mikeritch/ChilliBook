@@ -9,11 +9,15 @@ import android.app.PendingIntent
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.content.SharedPreferences
 import android.content.pm.PackageManager
+import android.media.AudioAttributes
 import android.os.Build
+import android.provider.Settings
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import java.time.Instant
 import java.time.LocalTime
 import java.time.ZonedDateTime
 
@@ -38,12 +42,15 @@ internal fun Diary.answeredReminder(date: String, slot: String): Boolean =
 object Reminders {
     const val EXTRA_SLOT = "reminder_slot"
     const val EXTRA_DATE = "reminder_date"
-    internal const val CHANNEL = "diary_reminders"
+    internal const val CHANNEL = "diary_check_in_alerts"
+    private const val LEGACY_CHANNEL = "diary_reminders"
     internal const val FIRE = "uk.chillibook.diary.REMIND"
+    private const val TEST_ID = 3
     private const val FLAGS = PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
     private fun id(slot: String) = if (slot == "am") 1 else 2
     internal fun minute(prefs: Prefs, slot: String) = if (slot == "am") prefs.morningReminder else prefs.eveningReminder
-    private fun state(context: Context) = context.getSharedPreferences("reminder_delivery", Context.MODE_PRIVATE)
+    internal fun state(context: Context): SharedPreferences =
+        context.getSharedPreferences("reminder_delivery", Context.MODE_PRIVATE)
 
     @Synchronized
     internal fun clear(context: Context) {
@@ -58,6 +65,7 @@ object Reminders {
             }
             manager.cancel(id(slot))
         }
+        manager.cancel(TEST_ID)
         state(context).edit().clear().apply()
     }
 
@@ -65,15 +73,12 @@ object Reminders {
         val manager = context.getSystemService(NotificationManager::class.java)
         return (Build.VERSION.SDK_INT < 33 || context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) ==
             PackageManager.PERMISSION_GRANTED) && manager.areNotificationsEnabled() &&
-            manager.getNotificationChannel(CHANNEL)?.importance != NotificationManager.IMPORTANCE_NONE
+            manager.getNotificationChannel(channelId(manager))?.importance != NotificationManager.IMPORTANCE_NONE
     }
 
-    fun reconcile(context: Context, prefs: Prefs) = reconcile(context, prefs, null)
-    fun reconcile(context: Context, diary: Diary) = reconcile(context, diary.prefs, diary)
-
-    private fun reconcile(context: Context, prefs: Prefs, diary: Diary?) {
+    fun reconcile(context: Context, diary: Diary) {
         try {
-            schedule(context, prefs, diary, false)
+            schedule(context, diary.prefs, diary, false)
         } catch (_: RuntimeException) {
             // A platform scheduling failure is independent of the committed diary write.
             // The next foreground visit retries from the saved preferences.
@@ -87,6 +92,7 @@ object Reminders {
         val manager by lazy { context.getSystemService(NotificationManager::class.java) }
         val alarms by lazy { context.getSystemService(AlarmManager::class.java) }
         val canNotify by lazy { allowed(context) }
+        if (prefs.morningReminder != null || prefs.eveningReminder != null) createChannel(manager)
         for (slot in listOf("am", "pm")) {
             val time = minute(prefs, slot)
             if (time == null && !state.contains("minute_$slot")) continue
@@ -107,7 +113,7 @@ object Reminders {
             val oldDue = state.getLong("due_$slot", 0)
             // Keep today's inexact alarm while Android is delaying delivery.
             if (!force && existing != null && oldMinute == time &&
-                java.time.Instant.ofEpochMilli(oldDue).atZone(now.zone).toLocalDate() == now.toLocalDate() &&
+                Instant.ofEpochMilli(oldDue).atZone(now.zone).toLocalDate() == now.toLocalDate() &&
                 last != now.toLocalDate().toString()) continue
             val next = nextReminder(now, time, last)
             val due = next.toInstant().toEpochMilli()
@@ -117,6 +123,61 @@ object Reminders {
             alarms.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, due, pending)
             state.edit().putInt("minute_$slot", time).putLong("due_$slot", due).apply()
         }
+    }
+
+    internal fun channelId(manager: NotificationManager): String {
+        if (manager.getNotificationChannel(CHANNEL) != null) return CHANNEL
+        val legacy = manager.getNotificationChannel(LEGACY_CHANNEL) ?: return CHANNEL
+        val customized = legacy.importance != NotificationManager.IMPORTANCE_LOW ||
+            legacy.sound != null || legacy.shouldVibrate() || legacy.canBypassDnd() ||
+            (Build.VERSION.SDK_INT >= 29 && legacy.hasUserSetImportance()) ||
+            (Build.VERSION.SDK_INT >= 30 && legacy.hasUserSetSound())
+        return if (customized) LEGACY_CHANNEL else CHANNEL
+    }
+
+    private fun createChannel(manager: NotificationManager) {
+        if (channelId(manager) != CHANNEL || manager.getNotificationChannel(CHANNEL) != null) return
+        manager.createNotificationChannel(
+            NotificationChannel(CHANNEL, "Diary reminder alerts", NotificationManager.IMPORTANCE_DEFAULT).apply {
+                setSound(Settings.System.DEFAULT_NOTIFICATION_URI,
+                    AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_NOTIFICATION).build())
+                lockscreenVisibility = Notification.VISIBILITY_PRIVATE
+            }
+        )
+    }
+
+    internal fun due(context: Context, prefs: Prefs, slot: String): Instant? {
+        val state = state(context)
+        val minute = minute(prefs, slot) ?: return null
+        return state.getLong("due_$slot", 0).takeIf { it > 0 && minute == state.getInt("minute_$slot", -1) }
+            ?.let(Instant::ofEpochMilli)
+    }
+
+    internal fun sendTest(context: Context, slot: String, now: ZonedDateTime = ZonedDateTime.now()): Boolean {
+        return try {
+            val manager = context.getSystemService(NotificationManager::class.java)
+            createChannel(manager)
+            if (!allowed(context)) return false
+            manager.notify(TEST_ID, notification(context, slot, now, TEST_ID, test = true))
+            true
+        } catch (_: RuntimeException) {
+            false
+        }
+    }
+
+    private fun notification(context: Context, slot: String, now: ZonedDateTime, id: Int, test: Boolean): Notification {
+        val date = now.toLocalDate()
+        val open = Intent(context, MainActivity::class.java)
+            .addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+            .putExtra(EXTRA_SLOT, slot).putExtra(EXTRA_DATE, date.toString())
+        val expires = date.plusDays(1).atStartOfDay(now.zone).toInstant().toEpochMilli() - now.toInstant().toEpochMilli()
+        val channel = channelId(context.getSystemService(NotificationManager::class.java))
+        return Notification.Builder(context, channel).setSmallIcon(R.drawable.reminder_icon)
+            .setContentTitle(if (test) "ChilliBook test reminder" else "ChilliBook")
+            .setContentText("Open your diary when it suits you.")
+            .setVisibility(Notification.VISIBILITY_PRIVATE).setOnlyAlertOnce(true).setAutoCancel(true)
+            .setTimeoutAfter(expires)
+            .setContentIntent(PendingIntent.getActivity(context, id, open, FLAGS)).build()
     }
 
     @Synchronized
@@ -133,20 +194,9 @@ object Reminders {
             now.toInstant().toEpochMilli() >= due && allowed(context) &&
             state.getString("last_$slot", null) != date.toString() && !diary.answeredReminder(date.toString(), slot)) {
             val manager = context.getSystemService(NotificationManager::class.java)
-            manager.createNotificationChannel(NotificationChannel(CHANNEL, "Check-in reminders", NotificationManager.IMPORTANCE_LOW).apply {
-                setSound(null, null)
-                enableVibration(false)
-                lockscreenVisibility = Notification.VISIBILITY_PRIVATE
-            })
-            val open = Intent(context, MainActivity::class.java)
-                .addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
-                .putExtra(EXTRA_SLOT, slot).putExtra(EXTRA_DATE, date.toString())
-            val notification = Notification.Builder(context, CHANNEL).setSmallIcon(R.drawable.reminder_icon)
-                .setContentTitle("ChilliBook").setContentText("Open your diary when it suits you.")
-                .setVisibility(Notification.VISIBILITY_PRIVATE).setOnlyAlertOnce(true).setAutoCancel(true)
-                .setTimeoutAfter(date.plusDays(1).atStartOfDay(now.zone).toInstant().toEpochMilli() - now.toInstant().toEpochMilli())
-                .setContentIntent(PendingIntent.getActivity(context, id(slot), open, FLAGS)).build()
-            if (state.edit().putString("last_$slot", date.toString()).commit()) manager.notify(id(slot), notification)
+            createChannel(manager)
+            manager.notify(id(slot), notification(context, slot, now, id(slot), test = false))
+            state.edit().putString("last_$slot", date.toString()).apply()
         }
         // Remove the consumed deadline before reconciling. The other slot may still be waiting.
         if (due == state.getLong("due_$slot", 0)) state.edit().remove("due_$slot").apply()

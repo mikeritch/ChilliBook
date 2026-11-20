@@ -7,7 +7,7 @@
 **Over USB.** Enable USB debugging and authorise the computer on the phone. Place the signed APK beside [Install ChilliBook.command](<release/Install ChilliBook.command>) and double-click the command on macOS. With Android SDK Platform-Tools on your path, you can also run the following from the project root.
 
 ```sh
-adb -d install -r release/ChilliBook-1.12.apk
+adb -d install -r release/ChilliBook-1.13.apk
 ```
 
 ## Back up or move the diary
@@ -26,12 +26,20 @@ Choose **Settings → Back up diary** and select a private destination. The JSON
 apk=app/build/outputs/apk/release/app-release.apk
 apksigner verify --print-certs "$apk"
 aapt dump badging "$apk" | head -1
-version=1.12  # set to the version you just built
+version=1.13  # set to the version you just built
 cp "$apk" "release/ChilliBook-$version.apk"
 git tag "v$version"
 git push origin HEAD "v$version"
 gh release create "v$version" "release/ChilliBook-$version.apk" --verify-tag --generate-notes --latest
 ```
+
+## Release 1.13
+
+**Settings → Feedback** has separate switches and previews for everyday sounds, everyday haptics, celebration sounds and celebration haptics. All four start off. The bloom grows at 3, 7 and 14 days, with a second sparkle wave from 14 days onward.
+
+Check-in reminders use Android’s standard notification sound by default and respect existing Android channel customizations. Settings shows the scheduled time and offers **Send test notification**, which opens the configured check-in when tapped.
+
+Emulator checks covered the settings and previews, scheduled delivery through Android’s alerting channel and the test notification link. The signed 1.12 → 1.13 update preserved the synthetic diary. [Feedback at 200% text](verification/1.13/celebration-large.png) · [Reminder settings](verification/1.13/reminders.png)
 
 ## Release 1.12
 
