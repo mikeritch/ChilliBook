@@ -125,6 +125,7 @@ private fun HistoryRow(diary: Diary,date: LocalDate, open: () -> Unit) {
     val checks = diary.checks.filter { it.date == key }
     val day = diary.days.find { it.date == key }
     val activities = diary.activities.filter { it.date == key }
+    val wearable = diary.wearable.find { it.date == key }
     val medicineNames = diary.doses.filter { it.date == key }.mapNotNull { dose -> diary.courses.find { it.id == dose.courseId }?.name }.distinct()
     val categories = categoryTags.keys.filter { activityFlag(day,activities,it) == true }
     val colors = MaterialTheme.colorScheme
@@ -136,8 +137,9 @@ private fun HistoryRow(diary: Diary,date: LocalDate, open: () -> Unit) {
             Text(date.dayOfMonth.toString(),fontSize=25.sp,fontFamily=FontFamily.Serif)
         }
         Column(Modifier.weight(1f),verticalArrangement=Arrangement.spacedBy(5.dp)) {
-            if (checks.isEmpty() && day == null && activities.isEmpty() && medicineNames.isEmpty()) Text("No entry",color=colors.onSurfaceVariant)
-            else {
+            val hasEntry = checks.isNotEmpty() || day != null || activities.isNotEmpty() || medicineNames.isNotEmpty()
+            if (!hasEntry && wearable == null) Text("No entry", color = colors.onSurfaceVariant)
+            if (hasEntry) {
                 @Composable fun SlotLabel(slot:String) {
                     val energy = checks.find { it.slot == slot }?.energy?.let(energyLabels::get)
                     val recorded = energy != null || diary.answeredReminder(key, slot)
@@ -165,6 +167,7 @@ private fun HistoryRow(diary: Diary,date: LocalDate, open: () -> Unit) {
                 }
 
             }
+            wearable?.let { WearableSummary(it) }
         }
         Text("›",color=colors.onSurfaceVariant)
     }
@@ -177,11 +180,17 @@ fun DateDetail(diary: Diary,date: String,edit:(String)->Unit) {
     val day = diary.days.find { it.date == date }
     val activities = diary.activities.filter { it.date == date }
     val checks = diary.checks.filter { it.date == date }
+    val wearable = diary.wearable.find { it.date == date }
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal=20.dp),
         verticalArrangement=Arrangement.spacedBy(8.dp)) {
         Text(local.label("EEEE"),fontFamily=FontFamily.Serif,fontSize=38.sp,lineHeight=44.sp)
         Text(local.label("d MMMM yyyy"),color=MaterialTheme.colorScheme.onSurfaceVariant)
-        if (checks.isEmpty() && day == null && activities.isEmpty() && diary.doses.none { it.date == date }) Text("No entry")
+        if (wearable == null && checks.isEmpty() && day == null && activities.isEmpty() && diary.doses.none { it.date == date }) Text("No entry")
+        wearable?.let { reading ->
+            Spacer(Modifier.height(12.dp))
+            Text("Wearable readings", Modifier.semantics { heading() }, fontFamily = FontFamily.Serif, fontSize = 22.sp)
+            WearableReadingValues(reading)
+        }
         val largeType = LocalDensity.current.fontScale > 1.35f
         for ((slot, label) in listOf("am" to "Morning","pm" to "Evening")) {
             Spacer(Modifier.height(12.dp))

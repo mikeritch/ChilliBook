@@ -18,6 +18,7 @@ import org.junit.Assume.assumeTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 import java.time.ZonedDateTime
+import java.time.Instant
 
 @RunWith(AndroidJUnit4::class)
 class ReminderDeliveryTest {
@@ -71,6 +72,16 @@ class ReminderDeliveryTest {
                 assertEquals("Open your diary when it suits you.", notification.extras.getCharSequence(Notification.EXTRA_TEXT)?.toString())
                 val contentIntent = checkNotNull(notification.contentIntent)
                 if (Build.VERSION.SDK_INT >= 31) assertTrue(contentIntent.isActivity)
+
+                val earliestSnooze = Instant.now().plusSeconds(3600)
+                val action = notification.actions.single { it.title.toString() == "Snooze 1 hour" }
+                action.actionIntent.send()
+                val snoozeTimeout = SystemClock.elapsedRealtime() + 5_000
+                while (manager.activeNotifications.any { it.id == requestId } &&
+                    SystemClock.elapsedRealtime() < snoozeTimeout) SystemClock.sleep(50)
+                assertTrue(manager.activeNotifications.none { it.id == requestId })
+                val snoozedUntil = checkNotNull(Reminders.due(context, prefs, slot))
+                assertTrue(snoozedUntil >= earliestSnooze.minusMillis(1) && snoozedUntil <= Instant.now().plusSeconds(3600))
             } finally {
                 runBlocking {
                     DiaryOperations.serialized {

@@ -1,6 +1,5 @@
 package uk.chillibook.diary
 
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -9,18 +8,14 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 
 private val energyShortDate = DateTimeFormatter.ofPattern("d MMM")
 private val energyFullDate = DateTimeFormatter.ofPattern("EEE d MMM yyyy")
+private val energyDetailDate = DateTimeFormatter.ofPattern("EEEE d MMMM yyyy")
 
 internal data class EnergyPoint(val date: LocalDate, val morning: Float?, val evening: Float?)
 internal data class EnergySeries(val points: List<EnergyPoint>, val paired: Int, val lower: Int)
@@ -57,7 +52,12 @@ internal fun PatternsEnergy(index: PatternIndex, start: LocalDate, end: LocalDat
     val series = remember(index, start, end, weekly) { energySeries(index, start, end, weekly) }
     val format = if (start.year != end.year || end.year != LocalDate.now().year)
         DateTimeFormatter.ofPattern("d MMM yyyy") else energyShortDate
-    var showReadings by rememberSaveable(start.toString(), end.toString()) { mutableStateOf(false) }
+    var selection by rememberSaveable(start.toEpochDay(), end.toEpochDay(), weekly) { mutableStateOf<Int?>(null) }
+    var showReadings by rememberSaveable(start.toEpochDay(), end.toEpochDay(), weekly) { mutableStateOf(false) }
+    var readingsWeek by rememberSaveable(start.toEpochDay(), end.toEpochDay(), weekly) { mutableStateOf<Long?>(null) }
+    val dates = remember(series) { series.points.map { it.date } }
+    val mornings = remember(series) { series.points.map { it.morning } }
+    val evenings = remember(series) { series.points.map { it.evening } }
     val type = MaterialTheme.typography
     val colors = MaterialTheme.colorScheme
     val range = "${start.format(format)} – ${end.format(format)}"
@@ -72,7 +72,37 @@ internal fun PatternsEnergy(index: PatternIndex, start: LocalDate, end: LocalDat
             Text("● Morning", color = colors.primary, style = type.labelMedium)
             Text("◆ Evening", color = colors.tertiary, style = type.labelMedium)
         }
-        EnergyPlot(series.points)
+        PatternChart(
+            description = "Morning and evening energy chart",
+            dates = dates,
+            series = listOf(
+                PatternChartSeries(mornings, colors.primary),
+                PatternChartSeries(evenings, colors.tertiary, diamond = true)
+            ),
+            scaleTop = 4f,
+            yLabels = listOf("High", "Medium", "Very low"),
+            daily = !weekly,
+            selected = selection,
+            onSelect = { selection = it }
+        )
+        selection?.let(series.points::getOrNull)?.let { point ->
+            val weekEnd = minOf(point.date.plusDays(6), end)
+            val day = point.date.format(energyDetailDate)
+            val title = if (weekly && point.date != weekEnd) "$day – ${weekEnd.format(energyDetailDate)}" else day
+            PatternPointDetails(title = title, onClose = { selection = null }) {
+                val median = if (weekly) " median" else ""
+                Text("Morning$median · ${energyPointLabel(point.morning)}", style = type.bodyMedium)
+                Text("Evening$median · ${energyPointLabel(point.evening)}", style = type.bodyMedium)
+                if (weekly) {
+                    PatternsLink("View this week’s daily readings") {
+                        readingsWeek = point.date.toEpochDay()
+                        showReadings = true
+                    }
+                } else {
+                    PatternsLink("Open diary entry") { onDate(point.date.toString()) }
+                }
+            }
+        }
         val note = when {
             series.points.none { it.morning != null || it.evening != null } -> "No energy readings in this period."
             series.paired == 0 -> "There are no paired morning and evening readings in this period."
@@ -82,15 +112,22 @@ internal fun PatternsEnergy(index: PatternIndex, start: LocalDate, end: LocalDat
         }
         Text(note, style = type.bodyMedium)
         if (series.points.none { it.morning != null || it.evening != null }) PatternsLink("Go to Today", onToday)
-        PatternsLink("View daily readings") { showReadings = true }
+        PatternsLink("View daily readings") {
+            readingsWeek = null
+            showReadings = true
+        }
     }
     if (showReadings) {
+        val week = readingsWeek?.let(LocalDate::ofEpochDay)
+        val readingsStart = week ?: start
+        val readingsEnd = week?.let { minOf(it.plusDays(6), end) } ?: end
         AlertDialog(onDismissRequest = { showReadings = false }, title = { Text("Energy readings") },
             text = {
                 LazyColumn {
-                    items((end.toEpochDay() - start.toEpochDay() + 1).toInt()) { offset ->
-                        val date = end.minusDays(offset.toLong())
+                    items((readingsEnd.toEpochDay() - readingsStart.toEpochDay() + 1).toInt()) { offset ->
+                        val date = readingsEnd.minusDays(offset.toLong())
                         Column(Modifier.fillMaxWidth().clickable(role = Role.Button) {
+                            showReadings = false
                             onDate(date.toString())
                         }.padding(vertical = 10.dp)) {
                             Text(date.format(energyFullDate), style = type.titleSmall)
@@ -106,56 +143,11 @@ internal fun PatternsEnergy(index: PatternIndex, start: LocalDate, end: LocalDat
     }
 }
 
-@Composable
-private fun EnergyPlot(points: List<EnergyPoint>) {
-    if (points.isEmpty()) return
-    val colors = MaterialTheme.colorScheme
-    val style = MaterialTheme.typography.labelSmall
-    val large = LocalDensity.current.fontScale > 1.35f
-    val height = if (large) 158.dp else 113.dp
-    val pad = if (large) 16.dp else 9.dp
-    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-        Column(Modifier.height(height), verticalArrangement = Arrangement.SpaceBetween,
-            horizontalAlignment = Alignment.End) {
-            listOf("High", "Medium", "Very low").forEach { Text(it, style = style) }
-        }
-        Column(Modifier.weight(1f)) {
-            Canvas(Modifier.fillMaxWidth().height(height).semantics {
-                contentDescription = "Morning and evening energy. Gaps indicate missing readings."
-            }) {
-                val margin = 5.dp.toPx()
-                val top = pad.toPx()
-                fun y(value: Float) = size.height - top - value / 4f * (size.height - 2 * top)
-                fun x(i: Int) = if (points.size == 1) size.width / 2
-                    else margin + (size.width - 2 * margin) * i / (points.size - 1)
-                for (level in listOf(0f, 2f, 4f)) {
-                    drawLine(colors.outlineVariant, Offset(margin, y(level)), Offset(size.width - margin, y(level)), 1.dp.toPx())
-                }
-                val r = if (points.size > 10) 2.dp.toPx() else 3.4.dp.toPx()
-                for (morning in listOf(true, false)) {
-                    val color = if (morning) colors.primary else colors.tertiary
-                    var previous: Offset? = null
-                    points.forEachIndexed { i, point ->
-                        val value = if (morning) point.morning else point.evening
-                        val position = value?.let { Offset(x(i), y(it)) }
-                        if (position != null) {
-                            previous?.let { drawLine(color, it, position, 1.8.dp.toPx()) }
-                            if (morning) drawCircle(color, r, position) else drawPath(Path().apply {
-                                moveTo(position.x, position.y - r)
-                                lineTo(position.x + r, position.y)
-                                lineTo(position.x, position.y + r)
-                                lineTo(position.x - r, position.y)
-                                close()
-                            }, color)
-                        }
-                        previous = position
-                    }
-                }
-            }
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = if (points.size == 1) Arrangement.Center else Arrangement.SpaceBetween) {
-                val ticks = if (large) listOf(0, points.lastIndex) else listOf(0, points.lastIndex / 2, points.lastIndex)
-                ticks.distinct().forEach { i -> Text(points[i].date.format(energyShortDate), style = style) }
-            }
-        }
-    }
+private fun energyPointLabel(value: Float?): String {
+    if (value == null) return "Not recorded"
+    val lower = value.toInt()
+    val lowerLabel = energyLabels.getOrNull(lower) ?: return "Not recorded"
+    if (value == lower.toFloat()) return lowerLabel
+    val upperLabel = energyLabels.getOrNull(lower + 1) ?: return lowerLabel
+    return "Between $lowerLabel and $upperLabel"
 }

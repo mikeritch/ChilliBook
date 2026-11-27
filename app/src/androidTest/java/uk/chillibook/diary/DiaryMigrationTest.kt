@@ -116,6 +116,78 @@ class DiaryMigrationTest {
         Storage(context, file).use { assertEquals(updated, it.read()) }
     }
 
+    @Test fun populatedV8PreservesDiaryAcrossWearableWriteAndReopen() = runBlocking {
+        val date = "2026-11-03"
+        val at = "2026-11-04T00:03:00Z"
+        val zone = "America/New_York"
+        createReleasedDatabase(8).use { db ->
+            db.execSQL("""INSERT INTO days (date,work,context,stress,caffeineTimes,at,zone)
+                VALUES (?,0,'["Fighting a bug"]',0,'[]',?,?)""", arrayOf(date, at, zone))
+        }
+        val original = Diary(days = listOf(Day(date, work = false, context = setOf("Fighting a bug"),
+            stress = 0, caffeineTimes = emptySet(), at = at, zone = zone)))
+        val updated = original.copy(wearable = listOf(WearableReading(
+            "2026-11-04", sleepMinutes = 400, sleepSource = "Example sleep"
+        )))
+        Storage(context, file).use { store ->
+            assertEquals(original, store.read())
+            store.save(original, updated)
+        }
+        Storage(context, file).use { store ->
+            assertEquals(updated, store.read())
+            assertEquals(listOf(date), store.read().dates())
+            store.replace(original)
+        }
+        Storage(context, file).use { assertEquals(original, it.read()) }
+    }
+
+    @Test fun populatedV9RetainsWearableTotalsAndAcceptsSleepDetailAcrossReopen() = runBlocking {
+        val date = "2026-10-25"
+        val reading = WearableReading(date, steps = 0, sleepMinutes = 420,
+            stepsSource = "Example steps", sleepSource = "Example sleep")
+        val original = Diary(wearable = listOf(reading))
+        createReleasedDatabase(9).use { db ->
+            db.execSQL("""INSERT INTO wearable_readings (date, steps, sleepMinutes, stepsSource, sleepSource)
+                VALUES (?, 0, 420, 'Example steps', 'Example sleep')""", arrayOf(date))
+        }
+        val detail = RecordedSleep("2026-10-24T23:00:00+01:00", "2026-10-25T05:00:00Z",
+            listOf(SleepPhase(30, 300, "light"), SleepPhase(300, 960, "deep")))
+        val updated = original.copy(wearable = listOf(reading.copy(sleepDetail = detail)))
+        Storage(context, file).use { store ->
+            assertEquals(original, store.read())
+            store.save(original, updated)
+        }
+        Storage(context, file).use { assertEquals(updated, it.read()) }
+    }
+
+    @Test fun populatedV10RetainsLegacySleepDetailAndStoresNewWearableDetails() = runBlocking {
+        val date = "2026-10-25"
+        val night = RecordedSleep("2026-10-24T23:00:00+01:00", "2026-10-25T05:00:00Z",
+            listOf(SleepPhase(30, 300, "light")))
+        val reading = WearableReading(date, steps = 0, sleepMinutes = 420,
+            stepsSource = "Example steps", sleepSource = "Example sleep", sleepDetail = night)
+        val original = Diary(wearable = listOf(reading))
+        createReleasedDatabase(10).use { db ->
+            db.execSQL("""INSERT INTO wearable_readings (date, steps, sleepMinutes, stepsSource, sleepSource, sleepDetail)
+                VALUES (?, 0, 420, 'Example steps', 'Example sleep', ?)""",
+                arrayOf(date, Backup.encodeSleepDetail(night).toString()))
+        }
+        val nap = RecordedSleep("2026-10-25T12:00:00Z", "2026-10-25T12:30:00Z")
+        val updated = original.copy(wearable = listOf(reading.copy(
+            sleepMinutes = 450,
+            sleepPeriods = listOf(WearableSleepPeriod(night, "Example sleep"), WearableSleepPeriod(nap)),
+            stepHours = listOf(StepHour(12, 0))
+        )))
+        Storage(context, file).use { store ->
+            val migrated = store.read()
+            assertEquals(original, migrated)
+            assertEquals(listOf(WearableSleepPeriod(night, "Example sleep")),
+                migrated.wearable.single().recordedSleepPeriods())
+            store.save(migrated, updated)
+        }
+        Storage(context, file).use { assertEquals(updated, it.read()) }
+    }
+
     private fun checkUpgrade(version: Int) = runBlocking {
         val at = "2026-11-18T16:02:12Z"
         val zone = "America/New_York"

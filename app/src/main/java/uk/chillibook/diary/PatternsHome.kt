@@ -26,7 +26,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import java.time.LocalDate
 
-private enum class PatternsPage { Overview, Activities, Symptoms, Medication }
+private enum class PatternsPage { Overview, Activities, Symptoms, Medication, Sleep }
 private val ranges = listOf(7, 28, 90, 0)
 private fun rangeLabel(days: Int) = if (days == 0) "All time" else "$days days"
 
@@ -39,6 +39,9 @@ fun PatternsScreen(diary: Diary, onDate: (String) -> Unit, onToday: () -> Unit, 
     var endDate by rememberSaveable { mutableStateOf<String?>(null) }
     val end = endDate?.let(LocalDate::parse)?.coerceAtMost(today) ?: today
     val start = if (period == 0) minOf(index.first ?: end, end) else end.minusDays(period - 1L)
+    val wearableStart = if (period == 0) {
+        minOf(start, diary.wearable.minOfOrNull { LocalDate.parse(it.date) } ?: start)
+    } else start
     var page by rememberSaveable(initialCourseId) {
         mutableStateOf(if (initialCourseId == null) PatternsPage.Overview else PatternsPage.Medication)
     }
@@ -51,6 +54,7 @@ fun PatternsScreen(diary: Diary, onDate: (String) -> Unit, onToday: () -> Unit, 
     val overview = { page = PatternsPage.Overview }
     BackHandler(page != PatternsPage.Overview, onBack = overview)
     when (page) {
+        PatternsPage.Sleep -> SleepPatterns(diary.wearable, wearableStart, end, onDate, overview)
         PatternsPage.Activities, PatternsPage.Symptoms -> PatternExplorer(
             diary, index, start, end, today, page == PatternsPage.Activities, onDate, onToday, overview)
         PatternsPage.Medication -> if (diary.courses.isNotEmpty()) {
@@ -69,6 +73,15 @@ fun PatternsScreen(diary: Diary, onDate: (String) -> Unit, onToday: () -> Unit, 
                     PatternsEnergy(index, start, end, weekly = period == 90 || period == 0, onDate = onDate,
                         onToday = onToday, onChooseEnd = { chooseDiaryDate(context, end.toString()) { endDate = it } })
                 }
+                if (diary.wearable.isNotEmpty()) {
+                    PatternsCard("Wearable readings") {
+                        WearablePatterns(diary.wearable, wearableStart, end, weekly = period == 90 || period == 0,
+                            onDate = onDate)
+                        if (diary.wearable.any { it.sleepMinutes != null && it.date in wearableStart.toString()..end.toString() }) {
+                            PatternsLink("Explore sleep stages and timing") { page = PatternsPage.Sleep }
+                        }
+                    }
+                }
                 PatternsCard("Activities", R.drawable.diary_sprout, colors.primaryContainer) {
                     ActivityComparisonCard(index, start, end, today, onDate) { page = PatternsPage.Activities }
                 }
@@ -76,7 +89,7 @@ fun PatternsScreen(diary: Diary, onDate: (String) -> Unit, onToday: () -> Unit, 
                     SymptomComparisonCard(index, start, end, today, onDate) { page = PatternsPage.Symptoms }
                 }
                 PatternsCard("Medications", R.drawable.diary_pill, colors.secondaryContainer) {
-                    MedicationOverview(diary, index, start, end, today) { key, course, selected, name, date ->
+                    MedicationOverview(diary, index, start, end, today, onDate) { key, course, selected, name, date ->
                         choiceKey = key
                         courseId = course
                         measure = selected

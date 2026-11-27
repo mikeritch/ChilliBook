@@ -15,8 +15,8 @@ android {
         applicationId = "uk.chillibook.diary"
         minSdk = 26
         targetSdk = 36
-        versionCode = providers.gradleProperty("diaryVersionCode").orNull?.toInt() ?: 23
-        versionName = providers.gradleProperty("diaryVersionName").orNull ?: "1.14"
+        versionCode = providers.gradleProperty("diaryVersionCode").orNull?.toInt() ?: 27
+        versionName = providers.gradleProperty("diaryVersionName").orNull ?: "1.17"
         buildConfigField("String", "UPDATE_REPOSITORY", "\"mikeritch/ChilliBook\"")
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -47,6 +47,7 @@ dependencies {
     implementation("androidx.compose.ui:ui")
     implementation("androidx.activity:activity-compose:1.11.0")
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.9.4")
+    implementation("androidx.health.connect:connect-client:1.1.0")
     implementation("androidx.room:room-runtime:2.8.3")
     implementation("androidx.room:room-ktx:2.8.3")
     ksp("androidx.room:room-compiler:2.8.3")

@@ -46,6 +46,7 @@ object Reminders {
     internal const val CHANNEL = "diary_check_in_alerts"
     private const val LEGACY_CHANNEL = "diary_reminders"
     internal const val FIRE = "uk.chillibook.diary.REMIND"
+    internal const val SNOOZE = "uk.chillibook.diary.SNOOZE_REMINDER"
     private const val TEST_ID = 3
     private const val FLAGS = PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
     private fun id(slot: String) = if (slot == "am") 1 else 2
@@ -93,6 +94,7 @@ object Reminders {
         val manager by lazy { context.getSystemService(NotificationManager::class.java) }
         val alarms by lazy { context.getSystemService(AlarmManager::class.java) }
         val canNotify by lazy { allowed(context) }
+        val today = now.toLocalDate().toString()
         if (prefs.morningReminder != null || prefs.eveningReminder != null) createChannel(manager)
         for (slot in listOf("am", "pm")) {
             val time = minute(prefs, slot)
@@ -100,10 +102,19 @@ object Reminders {
             val intent = Intent(context, ReminderReceiver::class.java).setAction(FIRE).putExtra(EXTRA_SLOT, slot)
             val last = state.getString("last_$slot", null)
             val oldMinute = state.getInt("minute_$slot", -1)
+            val activeDate = state.getString("active_date_$slot", null)
             if (time == null || oldMinute != time || !canNotify ||
-                last != now.toLocalDate().toString() || diary?.answeredReminder(now.toLocalDate().toString(), slot) == true) {
+                diary?.answeredReminder(activeDate ?: today, slot) == true) {
                 manager.cancel(id(slot))
+                state.edit().remove("active_date_$slot").remove("active_due_$slot").apply()
             }
+            val savedSnooze = state.getLong("snooze_due_$slot", 0)
+            val snoozeDate = state.getString("snooze_date_$slot", null)
+            val snoozeDue = savedSnooze.takeIf {
+                it > 0 && time != null && oldMinute == time && canNotify && snoozeDate != null &&
+                    diary?.answeredReminder(snoozeDate, slot) != true
+            }
+            if (savedSnooze > 0 && snoozeDue == null) clearSnooze(state, slot)
             val existing = PendingIntent.getBroadcast(context, id(slot), intent,
                 PendingIntent.FLAG_NO_CREATE or PendingIntent.FLAG_IMMUTABLE)
             if (time == null || !canNotify) {
@@ -113,17 +124,20 @@ object Reminders {
             }
             val oldDue = state.getLong("due_$slot", 0)
             // Keep today's inexact alarm while Android is delaying delivery.
-            if (!force && existing != null && oldMinute == time &&
+            if (savedSnooze == 0L && !force && existing != null && oldMinute == time &&
                 Instant.ofEpochMilli(oldDue).atZone(now.zone).toLocalDate() == now.toLocalDate() &&
-                last != now.toLocalDate().toString()) continue
-            val next = nextReminder(now, time, last)
-            val due = next.toInstant().toEpochMilli()
+                last != today) continue
+            val due = snoozeDue ?: nextReminder(now, time, last).toInstant().toEpochMilli()
             if (!force && existing != null && oldMinute == time && oldDue == due) continue
             intent.putExtra("due", due)
             val pending = PendingIntent.getBroadcast(context, id(slot), intent, FLAGS)
             alarms.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, due, pending)
             state.edit().putInt("minute_$slot", time).putLong("due_$slot", due).apply()
         }
+    }
+
+    private fun clearSnooze(state: SharedPreferences, slot: String) {
+        state.edit().remove("snooze_due_$slot").remove("snooze_date_$slot").apply()
     }
 
     internal fun channelId(manager: NotificationManager): String {
@@ -159,48 +173,79 @@ object Reminders {
             val manager = context.getSystemService(NotificationManager::class.java)
             createChannel(manager)
             if (!allowed(context)) return false
-            manager.notify(TEST_ID, notification(context, slot, now, TEST_ID, test = true))
+            manager.notify(TEST_ID, notification(context, slot, now, now.toLocalDate().toString(), due = null))
             true
         } catch (_: RuntimeException) {
             false
         }
     }
 
-    private fun notification(context: Context, slot: String, now: ZonedDateTime, id: Int, test: Boolean): Notification {
-        val date = now.toLocalDate()
+    private fun notification(context: Context, slot: String, now: ZonedDateTime, date: String, due: Long?): Notification {
+        val id = if (due == null) TEST_ID else id(slot)
         val open = Intent(context, MainActivity::class.java)
             .addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
-            .putExtra(EXTRA_SLOT, slot).putExtra(EXTRA_DATE, date.toString())
-        val expires = date.plusDays(1).atStartOfDay(now.zone).toInstant().toEpochMilli() - now.toInstant().toEpochMilli()
+            .putExtra(EXTRA_SLOT, slot).putExtra(EXTRA_DATE, date)
+        val expires = now.toLocalDate().plusDays(1).atStartOfDay(now.zone).toInstant().toEpochMilli() - now.toInstant().toEpochMilli()
         val channel = channelId(context.getSystemService(NotificationManager::class.java))
-        return Notification.Builder(context, channel).setSmallIcon(R.drawable.reminder_icon)
-            .setContentTitle(if (test) "ChilliBook test reminder" else "ChilliBook")
+        val builder = Notification.Builder(context, channel).setSmallIcon(R.drawable.reminder_icon)
+            .setContentTitle(if (due == null) "ChilliBook test reminder" else "ChilliBook")
             .setContentText("Open your diary when it suits you.")
             .setVisibility(Notification.VISIBILITY_PRIVATE).setOnlyAlertOnce(true).setAutoCancel(true)
             .setTimeoutAfter(expires)
-            .setContentIntent(PendingIntent.getActivity(context, id, open, FLAGS)).build()
+            .setContentIntent(PendingIntent.getActivity(context, id, open, FLAGS))
+        if (due != null) {
+            val snooze = Intent(context, ReminderReceiver::class.java).setAction(SNOOZE)
+                .putExtra(EXTRA_SLOT, slot).putExtra(EXTRA_DATE, date).putExtra("due", due)
+            builder.addAction(Notification.Action.Builder(null, "Snooze 1 hour",
+                PendingIntent.getBroadcast(context, id, snooze, FLAGS)).build())
+        }
+        return builder.build()
+    }
+
+    @Synchronized
+    internal fun snooze(context: Context, diary: Diary, intent: Intent, now: ZonedDateTime = ZonedDateTime.now()) {
+        val slot = intent.getStringExtra(EXTRA_SLOT)
+        if (slot != "am" && slot != "pm") return
+        val date = intent.getStringExtra(EXTRA_DATE) ?: return
+        val due = intent.getLongExtra("due", -1)
+        val state = state(context)
+        val time = minute(diary.prefs, slot) ?: return
+        if (due <= 0 || due != state.getLong("active_due_$slot", 0) ||
+            date != state.getString("active_date_$slot", null) || time != state.getInt("minute_$slot", -1) ||
+            diary.answeredReminder(date, slot) || !allowed(context)) return
+
+        val snoozeDue = now.toInstant().plusSeconds(3600).toEpochMilli()
+        state.edit().remove("active_due_$slot").remove("active_date_$slot")
+            .putString("snooze_date_$slot", date).putLong("snooze_due_$slot", snoozeDue).apply()
+        schedule(context, diary.prefs, diary, false, now)
+        context.getSystemService(NotificationManager::class.java).cancel(id(slot))
     }
 
     @Synchronized
     internal fun deliver(context: Context, diary: Diary, intent: Intent, now: ZonedDateTime = ZonedDateTime.now()) {
         val slot = intent.getStringExtra(EXTRA_SLOT)
         if (slot != "am" && slot != "pm") return
-        val date = now.toLocalDate()
+        val today = now.toLocalDate()
         val state = state(context)
         val due = intent.getLongExtra("due", -1)
         val time = minute(diary.prefs, slot)
-        if (time != null && due == state.getLong("due_$slot", 0) &&
-            time == state.getInt("minute_$slot", -1) &&
-            date.atTime(time / 60, time % 60).atZone(now.zone).toInstant().toEpochMilli() == due &&
-            now.toInstant().toEpochMilli() >= due && allowed(context) &&
-            state.getString("last_$slot", null) != date.toString() && !diary.answeredReminder(date.toString(), slot)) {
+        if (due <= 0 || due != state.getLong("due_$slot", 0) || now.toInstant().toEpochMilli() < due) return
+        val snoozed = due == state.getLong("snooze_due_$slot", 0)
+        val date = if (snoozed) state.getString("snooze_date_$slot", null) else today.toString()
+        val matchesCalendar = time != null && (snoozed ||
+            (today.atTime(time / 60, time % 60).atZone(now.zone).toInstant().toEpochMilli() == due &&
+                state.getString("last_$slot", null) != date))
+        if (date != null && matchesCalendar && time == state.getInt("minute_$slot", -1) &&
+            allowed(context) && !diary.answeredReminder(date, slot)) {
             val manager = context.getSystemService(NotificationManager::class.java)
             createChannel(manager)
-            manager.notify(id(slot), notification(context, slot, now, id(slot), test = false))
-            state.edit().putString("last_$slot", date.toString()).apply()
+            manager.notify(id(slot), notification(context, slot, now, date, due))
+            state.edit().putString("active_date_$slot", date).putLong("active_due_$slot", due).apply()
+            if (!snoozed) state.edit().putString("last_$slot", date).apply()
         }
         // Remove the consumed deadline before reconciling. The other slot may still be waiting.
-        if (due == state.getLong("due_$slot", 0)) state.edit().remove("due_$slot").apply()
+        if (snoozed) clearSnooze(state, slot)
+        state.edit().remove("due_$slot").apply()
         schedule(context, diary.prefs, diary, false, now)
     }
 }
@@ -212,8 +257,11 @@ class ReminderReceiver : BroadcastReceiver() {
             try {
                 DiaryOperations.serialized {
                     val diary = Storage(context).use { it.read() }
-                    if (intent.action == Reminders.FIRE) Reminders.deliver(context, diary, intent)
-                    else Reminders.schedule(context, diary.prefs, diary, true)
+                    when (intent.action) {
+                        Reminders.FIRE -> Reminders.deliver(context, diary, intent)
+                        Reminders.SNOOZE -> Reminders.snooze(context, diary, intent)
+                        else -> Reminders.schedule(context, diary.prefs, diary, true)
+                    }
                 }
             } catch (_: RuntimeException) {
                 // Storage or Android services can be unavailable. Opening the app reconciles again.

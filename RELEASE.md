@@ -7,12 +7,14 @@
 **Over USB.** Enable USB debugging and authorise the computer on the phone. Place the signed APK beside [Install ChilliBook.command](<release/Install ChilliBook.command>) and double-click the command on macOS. With Android SDK Platform-Tools on your path, you can also run the following from the project root.
 
 ```sh
-adb -d install -r release/ChilliBook-1.14.apk
+adb -d install -r release/ChilliBook-1.17.apk
 ```
 
 ## Back up or move the diary
 
-Choose **Settings → Back up diary** and select a private destination. The JSON file contains readable health data. A cloud provider may sync it. To restore, choose **Settings → Restore diary**, select the file and review the dates and counts before choosing **Replace diary**.
+Choose **Settings → Back up diary** and select a private destination. The JSON file contains readable health data, including any imported wearable readings. A cloud provider may sync it. To restore, choose **Settings → Restore diary**, select the file and review the dates and counts before choosing **Replace diary**.
+
+Starting with updates launched from 1.17, ChilliBook verifies a private backup before opening Android’s installer. Each successful backup replaces the previous copy. Find it in **Settings → Your diary backup**. If the diary can’t open after an update, the error screen offers an export.
 
 ## Publish a signed update
 
@@ -26,12 +28,24 @@ Choose **Settings → Back up diary** and select a private destination. The JSON
 apk=app/build/outputs/apk/release/app-release.apk
 apksigner verify --print-certs "$apk"
 aapt dump badging "$apk" | head -1
-version=1.14  # set to the version you just built
+version=1.17  # set to the version you just built
 cp "$apk" "release/ChilliBook-$version.apk"
 git tag "v$version"
 git push origin HEAD "v$version"
 gh release create "v$version" "release/ChilliBook-$version.apk" --verify-tag --generate-notes --latest
 ```
+
+## Release 1.17
+
+Connect Steps and Sleep through **Settings → Steps and sleep**. Today includes matching buttons beneath one illustrated heading that changes with the diary date. Steps expands to a breakdown from 6 am onward. Sleep expands to timing and stages for separate periods, including split sleep. History and Patterns show the daily totals.
+
+The seven-day charts label each day. Tap a point for its readings and the matching diary date. Weekly chart points open their daily readings. **Explore sleep stages and timing** compares recorded nights. Sleep stages and hourly steps appear when Health Connect provides them.
+
+Check-in reminders offer **Snooze 1 hour**. Updates started from 1.17 onwards create one private recovery copy before opening Android’s installer.
+
+The signed 1.14 → 1.17 update preserved every record and preference in the synthetic diary. Emulator checks also covered hourly steps, separate sleep periods and the chart controls at 200% text.
+
+[Today](verification/1.17/today-wearables.png) · [Hourly steps](verification/1.17/steps-details.png) · [Sleep periods](verification/1.17/sleep-periods.png) · [Chart details](verification/1.16/energy-point.png)
 
 ## Release 1.14
 

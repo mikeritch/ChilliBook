@@ -2,12 +2,16 @@ package uk.chillibook.diary
 
 import android.app.Application
 import android.content.Context
+import android.os.SystemClock
 import androidx.compose.runtime.*
 import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.viewModelScope
 import java.time.LocalDate
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -15,6 +19,7 @@ import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 
 // A tap already accepted by Today must finish even if Back immediately closes the activity.
 // Serialize new screens' opening reads behind the preceding screen's writes and close.
@@ -29,6 +34,16 @@ internal object DiaryOperations {
 
 class DiaryViewModel(app: Application) : AndroidViewModel(app) {
     private val storage = Storage(app)
+    internal val updateBackup = UpdateBackup(app)
+    internal var updateBackupAt by mutableStateOf<Long?>(null)
+        private set
+    private val wearablePrefs = app.getSharedPreferences("wearable_connection", Context.MODE_PRIVATE)
+    internal var wearableEnabled by mutableStateOf(wearablePrefs.getBoolean("enabled", false))
+        private set
+    internal var wearableSyncing by mutableStateOf(false)
+        private set
+    internal var wearableStatus by mutableStateOf<String?>(null)
+        private set
     internal var committed by mutableStateOf(Diary())
         private set
     var diary by mutableStateOf<Diary?>(null)
@@ -69,6 +84,8 @@ class DiaryViewModel(app: Application) : AndroidViewModel(app) {
     private companion object {
         const val EARNED_ON = "earned_on"
         val openModels = mutableSetOf<DiaryViewModel>()
+        var wearableJob: Job? = null
+        var lastWearableRefresh: Long? = null
     }
 
     init {
@@ -89,12 +106,16 @@ class DiaryViewModel(app: Application) : AndroidViewModel(app) {
     fun reset() {
         if (resetting || diary == null) return
         resetting = true
+        wearableJob?.cancel()
         revision++
         status = "Resetting diary…"
         DiaryOperations.enqueue {
             try {
+                withContext(Dispatchers.IO) { updateBackup.clear() }
+                openModels.forEach { it.updateBackupAt = null }
                 val empty = Diary()
                 storage.replace(empty)
+                setWearableEnabled(false)
                 clearRewards()
                 feedbackPrefs.edit().clear().apply()
                 openModels.forEach { it.acceptReset(empty) }
@@ -120,12 +141,109 @@ class DiaryViewModel(app: Application) : AndroidViewModel(app) {
         status = "Opening diary…"
         DiaryOperations.enqueue {
             try {
+                updateBackupAt = withContext(Dispatchers.IO) {
+                    try { updateBackup.modifiedAt() } catch (_: SecurityException) { null }
+                }
                 committed = storage.read()
                 diary = committed
                 status = ""
                 refreshReminders()
+                refreshWearable()
             } catch (e: CancellationException) { throw e }
             catch (_: Exception) { status = "Couldn’t open diary" }
+        }
+    }
+
+    internal suspend fun prepareUpdateBackup() = DiaryOperations.serialized {
+        check(diary != null && !hasPendingDiaryChanges())
+        val snapshot = storage.read()
+        val savedAt = withContext(Dispatchers.IO) {
+            updateBackup.write(snapshot)
+            checkNotNull(updateBackup.modifiedAt())
+        }
+        openModels.forEach { it.updateBackupAt = savedAt }
+        check(!hasPendingDiaryChanges())
+    }
+
+    private fun hasPendingDiaryChanges() = openModels.any { model ->
+        model.resetting || model.diary != null && model.diary != model.committed
+    }
+
+    internal fun setWearableEnabled(enabled: Boolean) {
+        wearablePrefs.edit().putBoolean("enabled", enabled).apply()
+        lastWearableRefresh = null
+        if (!enabled) wearableJob?.cancel()
+        openModels.forEach {
+            it.wearableEnabled = enabled
+            it.wearableStatus = null
+        }
+        if (enabled) refreshWearable(force = true)
+    }
+
+    internal fun refreshWearable(force: Boolean = false) {
+        if (!wearableEnabled || diary == null || wearableJob != null || busyReplacingDiary()) return
+        val elapsed = SystemClock.elapsedRealtime()
+        // Rotations and repeated foreground visits can follow the same sync closely.
+        if (!force && lastWearableRefresh?.let { elapsed - it < 5 * 60_000 } == true) return
+        lastWearableRefresh = elapsed
+        openModels.forEach { it.wearableSyncing = true; it.wearableStatus = null }
+        wearableJob = viewModelScope.launch(start = CoroutineStart.LAZY) {
+            try {
+                val app = getApplication<Application>()
+                val granted = WearableHealthConnect.granted(app).intersect(WearableHealthConnect.permissions)
+                if (granted.isEmpty()) {
+                    reportWearable("Allow steps or sleep in Health Connect to import readings.")
+                    return@launch
+                }
+                val readings = WearableHealthConnect.read(app, granted)
+                DiaryOperations.serialized {
+                    if (!wearableEnabled || busyReplacingDiary()) return@serialized
+                    if (readings.isEmpty()) reportWearable("No recent readings found. Sync your band in its app, then try again.")
+                    else {
+                        saveWearable(readings)
+                        reportWearable("Readings updated.")
+                    }
+                }
+            } catch (e: CancellationException) { throw e }
+            catch (_: Exception) { reportWearable("Couldn’t read Health Connect. Try again when it’s available.") }
+            finally {
+                wearableJob = null
+                openModels.forEach { it.wearableSyncing = false }
+            }
+        }
+        wearableJob?.start()
+    }
+
+    private fun busyReplacingDiary() = openModels.any { it.resetting || it.pendingRestore }
+
+    private fun reportWearable(message: String) {
+        openModels.forEach { it.wearableStatus = message }
+    }
+
+    private suspend fun saveWearable(readings: List<WearableReading>) {
+        val before = storage.read()
+        val byDate = before.wearable.associateBy { it.date }.toMutableMap()
+        for (reading in readings) {
+            val old = byDate[reading.date]
+            byDate[reading.date] = reading.copy(
+                steps = reading.steps ?: old?.steps,
+                stepsSource = if (reading.steps != null) reading.stepsSource else old?.stepsSource,
+                sleepMinutes = reading.sleepMinutes ?: old?.sleepMinutes,
+                sleepSource = if (reading.sleepMinutes != null) reading.sleepSource else old?.sleepSource,
+                sleepDetail = if (reading.sleepMinutes != null) reading.sleepDetail else old?.sleepDetail,
+                sleepPeriods = if (reading.sleepMinutes != null) reading.sleepPeriods else old?.sleepPeriods,
+                stepHours = reading.stepHours ?: old?.stepHours
+            )
+        }
+        val merged = byDate.values.sortedBy { it.date }
+        if (merged != before.wearable) storage.save(before, before.copy(wearable = merged))
+        showWearable(merged)
+    }
+
+    private fun showWearable(readings: List<WearableReading>) {
+        openModels.forEach {
+            it.committed = it.committed.copy(wearable = readings)
+            it.diary = it.diary?.copy(wearable = readings)
         }
     }
 
@@ -138,9 +256,11 @@ class DiaryViewModel(app: Application) : AndroidViewModel(app) {
             if (generation != resetGeneration) return@enqueue
             try {
                 val before = committed
-                if (replace) storage.replace(target) else storage.save(before, target)
-                committed = target
+                val written = if (replace) target else target.copy(wearable = before.wearable)
+                if (replace) storage.replace(written) else storage.save(before, written)
+                committed = written
                 if (replace) {
+                    showWearable(written.wearable)
                     clearRewards()
                 } else {
                     val celebrated = editDate != null && newlyCompletedDay(before, target, editDate) &&
@@ -191,6 +311,7 @@ class DiaryViewModel(app: Application) : AndroidViewModel(app) {
 
     fun restore(value: Diary) {
         if (resetting) return
+        wearableJob?.cancel()
         pendingRestore = true
         diary = value
         pendingEditDate = null

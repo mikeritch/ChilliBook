@@ -25,7 +25,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 
 @Composable
-internal fun UpdateSettings() {
+internal fun UpdateSettings(prepareBackup: suspend () -> Unit) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val lifecycle = LocalLifecycleOwner.current.lifecycle
@@ -38,11 +38,31 @@ internal fun UpdateSettings() {
 
     fun openInstaller() {
         val intent = installer ?: return
-        try {
-            context.startActivity(intent)
-            message = "Confirm the update in the Android installer."
-        } catch (_: RuntimeException) {
-            message = "Couldn’t open the Android installer. Try again."
+        if (work != null) return
+        message = "Saving a backup of your diary…"
+        work = scope.launch {
+            try {
+                lifecycle.withResumed { }
+                try {
+                    prepareBackup()
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (_: Exception) {
+                    message = "Couldn’t save the update backup. Check that your diary is saved and your device has free space, then try again."
+                    return@launch
+                }
+                lifecycle.withResumed {
+                    context.startActivity(intent)
+                    message = "Diary backup saved. Confirm the update in the Android installer."
+                }
+            } catch (e: CancellationException) {
+                message = "Installation cancelled."
+                throw e
+            } catch (_: RuntimeException) {
+                message = "Couldn’t open the Android installer. Try again."
+            } finally {
+                work = null
+            }
         }
     }
 

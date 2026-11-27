@@ -13,6 +13,19 @@ class ValueConverters {
     @TypeConverter fun writeWorkSetup(value: WorkSetup?): String? = value?.let { Backup.encodeWorkSetup(it).toString() }
     @TypeConverter fun readWorkSetup(raw: String?): WorkSetup? = raw?.let { Backup.decodeWorkSetup(JSONObject(it)) }
 
+    @TypeConverter fun writeSleepDetail(value: RecordedSleep?): String? = value?.let { Backup.encodeSleepDetail(it).toString() }
+    @TypeConverter fun readSleepDetail(raw: String?): RecordedSleep? = raw?.let { Backup.decodeSleepDetail(JSONObject(it)) }
+
+    @TypeConverter fun writeSleepPeriods(value: List<WearableSleepPeriod>?): String? =
+        value?.let { Backup.encodeSleepPeriods(it).toString() }
+    @TypeConverter fun readSleepPeriods(raw: String?): List<WearableSleepPeriod>? =
+        raw?.let { Backup.decodeSleepPeriods(JSONArray(it)) }
+
+    @TypeConverter fun writeStepHours(value: List<StepHour>?): String? =
+        value?.let { Backup.encodeStepHours(it).toString() }
+    @TypeConverter fun readStepHours(raw: String?): List<StepHour>? =
+        raw?.let { Backup.decodeStepHours(JSONArray(it)) }
+
     @TypeConverter fun writeSet(value: Set<String>?): String? =
         value?.let { JSONArray(it.sorted()).toString() }
     @TypeConverter fun readSet(raw: String?): Set<String>? = raw?.let {
@@ -33,12 +46,15 @@ interface DiaryDao {
     @Query("SELECT * FROM medication_courses ORDER BY id") suspend fun courses(): List<MedicationCourse>
     @Query("SELECT * FROM medication_regimens ORDER BY id") suspend fun regimens(): List<MedicationRegimen>
     @Query("SELECT * FROM medication_doses ORDER BY id") suspend fun doses(): List<MedicationDose>
+    @Query("SELECT * FROM wearable_readings ORDER BY date") suspend fun wearable(): List<WearableReading>
     @Upsert suspend fun putCourse(value: MedicationCourse)
     @Upsert suspend fun putRegimen(value: MedicationRegimen)
     @Upsert suspend fun putDose(value: MedicationDose)
+    @Upsert suspend fun putWearable(value: WearableReading)
     @Delete suspend fun deleteCourse(value: MedicationCourse)
     @Delete suspend fun deleteRegimen(value: MedicationRegimen)
     @Delete suspend fun deleteDose(value: MedicationDose)
+    @Delete suspend fun deleteWearable(value: WearableReading)
     @Query("SELECT * FROM prefs WHERE id = 1") suspend fun prefs(): Prefs?
     @Upsert suspend fun putDay(value: Day)
     @Upsert suspend fun putCheck(value: Check)
@@ -50,10 +66,11 @@ interface DiaryDao {
 }
 
 @Database(entities = [Day::class, Check::class, ActivityEntry::class, Prefs::class,
-    MedicationCourse::class, MedicationRegimen::class, MedicationDose::class], version = 8, exportSchema = true,
+    MedicationCourse::class, MedicationRegimen::class, MedicationDose::class, WearableReading::class], version = 11, exportSchema = true,
     autoMigrations = [AutoMigration(from = 1, to = 2), AutoMigration(from = 2, to = 3, spec = RemoveRetiredFields::class),
         AutoMigration(from = 3, to = 4, spec = RemoveSymptomPins::class), AutoMigration(from = 4, to = 5),
-        AutoMigration(from = 5, to = 6), AutoMigration(from = 6, to = 7), AutoMigration(from = 7, to = 8)])
+        AutoMigration(from = 5, to = 6), AutoMigration(from = 6, to = 7), AutoMigration(from = 7, to = 8),
+        AutoMigration(from = 8, to = 9), AutoMigration(from = 9, to = 10), AutoMigration(from = 10, to = 11)])
 @TypeConverters(ValueConverters::class)
 abstract class DiaryDatabase : RoomDatabase() {
     abstract fun diary(): DiaryDao
@@ -71,7 +88,7 @@ class Storage(context: Context, databaseName: String = "diary.db") : AutoCloseab
     private val dao = db.diary()
 
     private suspend fun snapshot() = Diary(dao.days(), dao.checks(), dao.activities(), dao.prefs() ?: Prefs(),
-        courses = dao.courses(), regimens = dao.regimens(), doses = dao.doses())
+        courses = dao.courses(), regimens = dao.regimens(), doses = dao.doses(), wearable = dao.wearable())
     suspend fun read(): Diary = db.withTransaction { snapshot() }
 
     suspend fun save(before: Diary, after: Diary) = db.withTransaction { applyChanges(before, after) }
@@ -85,6 +102,7 @@ class Storage(context: Context, databaseName: String = "diary.db") : AutoCloseab
         sync(before.courses, after.courses, MedicationCourse::id, dao::putCourse, dao::deleteCourse)
         sync(before.regimens, after.regimens, MedicationRegimen::id, dao::putRegimen, dao::deleteRegimen)
         sync(before.doses, after.doses, MedicationDose::id, dao::putDose, dao::deleteDose)
+        sync(before.wearable, after.wearable, WearableReading::date, dao::putWearable, dao::deleteWearable)
         if (before.prefs != after.prefs) dao.putPrefs(after.prefs)
     }
 

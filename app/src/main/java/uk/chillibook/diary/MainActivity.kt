@@ -11,6 +11,8 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -58,6 +60,7 @@ class MainActivity : ComponentActivity() {
         super.onResume()
         localDay = LocalDate.now()
         diaryModel?.refreshReminders()
+        diaryModel?.refreshWearable()
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -223,13 +226,21 @@ private fun DiaryHome(vm: DiaryViewModel, localDay: String, target: ReminderTarg
                 Box(Modifier.weight(1f)) {
                     val diary = vm.diary
                     when {
-                        diary == null -> Column(Modifier.padding(20.dp)) {
+                        diary == null -> Column(
+                            Modifier.verticalScroll(rememberScrollState()).padding(20.dp),
+                            verticalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
                             Text(vm.status)
-                            if (vm.status.startsWith("Couldn’t")) TextButton(onClick = vm::retry) { Text("Retry") }
+                            if (vm.status.startsWith("Couldn’t")) {
+                                TextButton(onClick = vm::retry) { Text("Retry") }
+                                vm.updateBackupAt?.let { UpdateBackupRecovery(vm.updateBackup, it, onRestore = null) }
+                            }
                         }
                         settings -> SettingsScreen(diary, vm::edit, vm::restore, vm.status, vm::retry, back,
                             vm::reset, vm.resetting, vm.feedbackEnabled, vm::setFeedback, ::preview,
-                            refreshReminders = vm::refreshReminders)
+                            refreshReminders = vm::refreshReminders, prepareUpdateBackup = vm::prepareUpdateBackup,
+                            updateBackup = vm.updateBackup, updateBackupAt = vm.updateBackupAt,
+                            wearableSettings = { WearableSettings(vm) })
                         medications -> Column {
                             Box(Modifier.weight(1f)) {
                                 MedicationManagement(diary, vm::edit) { course ->

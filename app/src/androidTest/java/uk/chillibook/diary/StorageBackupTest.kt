@@ -29,6 +29,103 @@ class StorageBackupTest {
         assertEquals(sample, Backup.decode(Backup.encode(sample)))
     }
 
+    @Test fun wearableBackupPreservesZeroMissingMetricsAndSources() {
+        val readings = listOf(
+            WearableReading("2026-11-15", steps = 0, stepsSource = "Example steps"),
+            WearableReading("2026-11-16", sleepMinutes = 385, sleepSource = "Example sleep")
+        )
+        val original = sample.copy(wearable = readings)
+        val encoded = Backup.encode(original.copy(wearable = readings.reversed()))
+        assertEquals(original, Backup.decode(encoded))
+        val previous = JSONObject(Backup.encode(sample)).apply {
+            put("version", 8)
+            remove("wearable")
+        }
+        assertEquals(sample, Backup.decode(previous.toString()))
+
+        val duplicate = JSONObject(encoded).apply {
+            getJSONArray("wearable").apply { put(getJSONObject(0)) }
+        }
+        val negative = JSONObject(encoded).apply {
+            getJSONArray("wearable").getJSONObject(0).put("steps", -1)
+        }
+        assertTrue(runCatching { Backup.decode(duplicate.toString()) }.isFailure)
+        assertTrue(runCatching { Backup.decode(negative.toString()) }.isFailure)
+    }
+
+    @Test fun sleepDetailBackupPreservesOffsetChangesAndRejectsBadPhases() {
+        val detail = RecordedSleep("2026-10-24T23:00:00+01:00", "2026-10-25T05:00:00Z",
+            listOf(SleepPhase(600, 900, "unknown"), SleepPhase(24000, 25200, "rem")))
+        val reading = WearableReading("2026-10-25", sleepMinutes = 420, sleepDetail = detail)
+        val original = sample.copy(wearable = listOf(reading))
+        val encoded = Backup.encode(original)
+        assertEquals(original, Backup.decode(encoded))
+
+        val previous = JSONObject(encoded).put("version", 9)
+        previous.getJSONArray("wearable").getJSONObject(0).remove("sleepDetail")
+        assertEquals(sample.copy(wearable = listOf(reading.copy(sleepDetail = null))),
+            Backup.decode(previous.toString()))
+
+        val invalid = listOf(
+            detail.copy(end = "2026-10-25T05:00:00"),
+            detail.copy(end = detail.start),
+            detail.copy(phases = listOf(SleepPhase(-1, 20, "awake"))),
+            detail.copy(phases = listOf(SleepPhase(0, 0, "awake"))),
+            detail.copy(phases = listOf(SleepPhase(0, 25201, "deep"))),
+            detail.copy(phases = listOf(SleepPhase(0, 100, "nap"))),
+            detail.copy(phases = listOf(SleepPhase(0, 100, "awake"), SleepPhase(99, 200, "light"))),
+            detail.copy(phases = detail.phases.reversed()),
+            detail.copy(phases = List(MAX_SLEEP_PHASES + 1) { SleepPhase(it, it + 1, "light") })
+        )
+        for (sleep in invalid) {
+            val damaged = JSONObject(encoded)
+            damaged.getJSONArray("wearable").getJSONObject(0).put("sleepDetail", Backup.encodeSleepDetail(sleep))
+            assertTrue(runCatching { Backup.decode(damaged.toString()) }.isFailure)
+        }
+    }
+
+    @Test fun wearableDetailBackupPreservesPeriodsHoursAndLegacyFallback() {
+        val night = RecordedSleep("2026-10-24T23:00:00+01:00", "2026-10-25T05:00:00Z",
+            listOf(SleepPhase(24000, 25200, "rem")))
+        val nap = RecordedSleep("2026-10-25T12:00:00Z", "2026-10-25T12:30:00Z")
+        val periods = listOf(WearableSleepPeriod(night, "Watch"), WearableSleepPeriod(nap))
+        val reading = WearableReading("2026-10-25", steps = 158, sleepMinutes = 450,
+            sleepDetail = night, sleepSource = "Watch", sleepPeriods = periods,
+            stepHours = listOf(StepHour(9, 0), StepHour(21, 158)))
+        val original = sample.copy(wearable = listOf(reading))
+        val encoded = Backup.encode(original)
+        assertEquals(original, Backup.decode(encoded))
+
+        val legacy = JSONObject(encoded).put("version", 10).apply {
+            getJSONArray("wearable").getJSONObject(0).apply {
+                remove("sleepPeriods")
+                remove("stepHours")
+            }
+        }
+        val restored = Backup.decode(legacy.toString()).wearable.single()
+        assertEquals(reading.copy(sleepPeriods = null, stepHours = null), restored)
+        assertEquals(periods.take(1), restored.recordedSleepPeriods())
+    }
+
+    @Test fun wearableDetailBackupRejectsOverlappingPeriodsWrongWakeDatesAndInvalidHours() {
+        val night = WearableSleepPeriod(RecordedSleep("2026-10-24T23:00:00+01:00", "2026-10-25T05:00:00Z"))
+        val overlap = WearableSleepPeriod(RecordedSleep("2026-10-25T05:30:00+01:00", "2026-10-25T07:00:00+01:00"))
+        val nextDay = WearableSleepPeriod(RecordedSleep("2026-10-25T23:00:00Z", "2026-10-26T00:01:00Z"))
+        val reading = WearableReading("2026-10-25")
+        val invalid = listOf(
+            reading.copy(sleepPeriods = listOf(night, overlap)),
+            reading.copy(sleepPeriods = listOf(nextDay)),
+            reading.copy(stepHours = listOf(StepHour(9, 1), StepHour(9, 0))),
+            reading.copy(stepHours = listOf(StepHour(9, 1), StepHour(8, 0))),
+            reading.copy(stepHours = listOf(StepHour(24, 1))),
+            reading.copy(stepHours = listOf(StepHour(9, -1)))
+        )
+        for (entry in invalid) {
+            val encoded = Backup.encode(sample.copy(wearable = listOf(entry)))
+            assertTrue(runCatching { Backup.decode(encoded) }.isFailure)
+        }
+    }
+
     @Test fun contextBackupPreservesUnknownsAndRejectsInvalidAnswers() {
         val day = sample.days.single()
         val original = sample.copy(days = listOf(day.copy(
@@ -66,7 +163,7 @@ class StorageBackupTest {
         val check = morning.copy(symptoms = mapOf("Brain fog" to UNRATED_SYMPTOM, "Headache" to 0))
         val original = sample.copy(checks = listOf(check))
         val backup = JSONObject(Backup.encode(original))
-        assertEquals(8, backup.getInt("version"))
+        assertEquals(10, backup.getInt("version"))
         assertFalse(backup.getJSONObject("prefs").has("pins"))
         assertFalse(backup.has("episodes"))
         assertFalse(backup.getJSONArray("days").getJSONObject(0).has("workOff"))
@@ -288,7 +385,7 @@ class StorageBackupTest {
             }
             val missingField = JSONObject(valid).apply { getJSONArray("days").getJSONObject(0).remove("work") }
             val wrongType = JSONObject(valid).apply { getJSONArray("checks").getJSONObject(0).put("energy", "2") }
-            val unsupported = JSONObject(valid).put("version", 9)
+            val unsupported = JSONObject(valid).put("version", 11)
             val badDate = JSONObject(valid).apply { getJSONArray("days").getJSONObject(0).put("date", "2026-02-30") }
             for (damaged in listOf(valid.dropLast(1), valid + "extra", duplicate.toString(), unsupported.toString(),
                 missingField.toString(), wrongType.toString(), badDate.toString())) {

@@ -49,12 +49,37 @@ data class Prefs(@PrimaryKey val id: Int = 1, val theme: String = "system",
     val morningReminder: Int? = null, val eveningReminder: Int? = null, val workPin: WorkSetup? = null,
     @ColumnInfo(defaultValue = "'{}'") val activityPins: Map<String, ActivitySetup> = emptyMap())
 
+internal const val MAX_SLEEP_PHASES = 1440
+internal const val MAX_SLEEP_PERIODS = 48
+
+// Phase offsets are whole seconds elapsed since the session start, with an exclusive end.
+data class SleepPhase(val startSecond: Int, val endSecond: Int, val kind: String)
+data class RecordedSleep(val start: String, val end: String, val phases: List<SleepPhase> = emptyList())
+data class WearableSleepPeriod(val detail: RecordedSleep, val source: String? = null)
+data class StepHour(val hour: Int, val steps: Int)
+
+@Entity(tableName = "wearable_readings")
+data class WearableReading(
+    @PrimaryKey val date: String,
+    val steps: Int? = null,
+    val sleepMinutes: Int? = null,
+    val stepsSource: String? = null,
+    val sleepSource: String? = null,
+    val sleepDetail: RecordedSleep? = null,
+    val sleepPeriods: List<WearableSleepPeriod>? = null,
+    val stepHours: List<StepHour>? = null
+)
+
+internal fun WearableReading.recordedSleepPeriods(): List<WearableSleepPeriod> =
+    sleepPeriods ?: sleepDetail?.let { listOf(WearableSleepPeriod(it, sleepSource)) }.orEmpty()
+
 data class Diary(val days: List<Day> = emptyList(), val checks: List<Check> = emptyList(),
     val activities: List<ActivityEntry> = emptyList(),
     val prefs: Prefs = Prefs(),
     val courses: List<MedicationCourse> = emptyList(),
     val regimens: List<MedicationRegimen> = emptyList(),
-    val doses: List<MedicationDose> = emptyList())
+    val doses: List<MedicationDose> = emptyList(),
+    val wearable: List<WearableReading> = emptyList())
 
 val energyLabels = listOf("Very low","Low","Medium","Fairly high","High")
 val sleepLabels = listOf("Unrefreshed","A little","Mostly","Fully")

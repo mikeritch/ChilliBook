@@ -1,6 +1,7 @@
 package uk.chillibook.diary
 
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -15,18 +16,23 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
+import java.time.temporal.ChronoUnit
 
 private val axisDate = DateTimeFormatter.ofPattern("d MMM")
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 internal fun MedicationOverview(diary: Diary, index: PatternIndex, start: LocalDate, end: LocalDate,
-    today: LocalDate, openReview: (choiceKey: String, courseId: String, measure: MedicationMeasure, symptom: String, day: String?) -> Unit) {
+    today: LocalDate, openDiaryDate: (String) -> Unit,
+    openReview: (choiceKey: String, courseId: String, measure: MedicationMeasure, symptom: String, day: String?) -> Unit) {
     val doses = remember(diary.doses, start, end, today) {
         diary.asNeededDoses(start, minOf(today, end))
     }
@@ -73,7 +79,24 @@ internal fun MedicationOverview(diary: Diary, index: PatternIndex, start: LocalD
                 value?.let { LocalDate.parse(check.date) to it }
             }.sortedBy { it.first }.toList()
     }
-    MedicationPlot(first, last, event, points, if (choice.asNeeded) doseDates else emptyList(), measure, subject)
+    var pickedDate by rememberSaveable(choice.key, first.toEpochDay(), last.toEpochDay(), measure, symptom) {
+        mutableStateOf<Long?>(null)
+    }
+    val selectedDay = pickedDate?.let(LocalDate::ofEpochDay)
+    MedicationPlot(first, last, event, points, if (choice.asNeeded) doseDates else emptyList(), measure, subject,
+        selectedDay) { pickedDate = it.toEpochDay() }
+    if (selectedDay != null) PatternPointDetails(selectedDay.format(DateTimeFormatter.ofPattern("EEEE d MMMM yyyy")),
+        onClose = { pickedDate = null }) {
+        val level = points.firstOrNull { it.first == selectedDay }?.second
+        val value = if (selectedDay > today) "Still to come" else if (level == null) "Not recorded"
+            else if (measure.symptom) symptomRatingLabel(level) else energyLabels[level]
+        Text("$subject · $value", style = MaterialTheme.typography.bodyMedium)
+        if (choice.asNeeded && selectedDay in doseDates) {
+            PatternsLink("See dose details") { openReview(choice.key, choice.course.id, measure, symptom, selectedDay.toString()) }
+        } else if (selectedDay <= today) {
+            PatternsLink("Open diary entry") { openDiaryDate(selectedDay.toString()) }
+        }
+    }
     val caption = when {
         event == null -> "Triangles mark recorded dose days. The line shows diary ratings."
         event.stop -> "The shaded week starts after the last day of the course."
@@ -112,12 +135,15 @@ internal fun MedicationDropdown(label: String, options: List<String>, choose: (I
 
 @Composable
 private fun MedicationPlot(first: LocalDate, last: LocalDate, event: MedicationChange?, points: List<Pair<LocalDate, Int>>,
-    doses: List<LocalDate>, measure: MedicationMeasure, subject: String) {
+    doses: List<LocalDate>, measure: MedicationMeasure, subject: String, selected: LocalDate?, onSelect: (LocalDate) -> Unit) {
     val colors = MaterialTheme.colorScheme
     val labels = if (measure.symptom) severityLabels else energyLabels
     val rated = points.count { it.second in labels.indices }
     val description = "$subject, $rated rated dates. " + (event?.let { "${it.label} on ${it.date}." }
         ?: "${doses.size} recorded dose days.")
+    val dates = remember(first, last) { dateSequence(first, last).toList() }
+    val select by rememberUpdatedState(onSelect)
+    val selectedIndex = selected?.let { ChronoUnit.DAYS.between(first, it).toInt() }
     if (event != null) Text("${event.label} · ${event.date.format(axisDate)}", color = colors.primary,
         style = MaterialTheme.typography.labelMedium)
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(5.dp)) {
@@ -127,12 +153,23 @@ private fun MedicationPlot(first: LocalDate, last: LocalDate, event: MedicationC
             Text(labels.first(), style = MaterialTheme.typography.labelSmall)
         }
         Column(Modifier.weight(1f)) {
-            Canvas(Modifier.fillMaxWidth().height(118.dp).semantics { contentDescription = description }) {
+            Canvas(Modifier.fillMaxWidth().height(118.dp)
+                .pointerInput(dates) {
+                    detectTapGestures { tap ->
+                        if (dates.isNotEmpty()) select(dates[(tap.x * dates.size / size.width).toInt().coerceIn(dates.indices)])
+                    }
+                }.semantics {
+                    contentDescription = description
+                    onClick(label = "Show a reading") {
+                        select(selected ?: points.lastOrNull()?.first ?: doses.lastOrNull() ?: last)
+                        true
+                    }
+                }) {
                 val pad = 4.dp.toPx()
                 val top = 8.dp.toPx()
                 val bottom = 88.dp.toPx()
-                val span = (last.toEpochDay() - first.toEpochDay()).coerceAtLeast(1)
-                fun x(day: LocalDate) = pad + (size.width - 2 * pad) * ((day.toEpochDay() - first.toEpochDay()).toFloat() / span)
+                val slotWidth = size.width / dates.size.coerceAtLeast(1)
+                fun x(day: LocalDate) = slotWidth * (ChronoUnit.DAYS.between(first, day) + .5f)
                 fun y(level: Int) = bottom - (bottom - top) * level / labels.lastIndex
                 if (event != null) {
                     val boundary = (x(event.laterWeekStart) + x(event.laterWeekStart.minusDays(1))) / 2
@@ -142,6 +179,9 @@ private fun MedicationPlot(first: LocalDate, last: LocalDate, event: MedicationC
                         pathEffect = PathEffect.dashPathEffect(floatArrayOf(4.dp.toPx(), 3.dp.toPx())))
                 }
                 for (height in listOf(top, bottom)) drawLine(colors.outlineVariant, Offset(0f, height), Offset(size.width, height))
+                selected?.let { day ->
+                    drawLine(colors.primary.copy(alpha = .65f), Offset(x(day), top), Offset(x(day), bottom), 1.dp.toPx())
+                }
                 val tone = if (measure.slot == "am") colors.primary else colors.tertiary
                 var previous: LocalDate? = null
                 var previousPoint = Offset.Zero
@@ -168,10 +208,7 @@ private fun MedicationPlot(first: LocalDate, last: LocalDate, event: MedicationC
                     }, colors.primary)
                 }
             }
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Text(first.format(axisDate), style = MaterialTheme.typography.labelSmall)
-                if (last != first) Text(last.format(axisDate), style = MaterialTheme.typography.labelSmall)
-            }
+            if (dates.isNotEmpty()) PatternDateAxis(dates, daily = true, selectedIndex, LocalDensity.current.fontScale)
         }
     }
 }

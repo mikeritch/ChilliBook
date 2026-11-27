@@ -29,6 +29,10 @@ internal fun SettingsScreen(
     onFeedbackChanged: (FeedbackOption, Boolean) -> Unit,
     previewFeedback: (FeedbackOption) -> Boolean,
     refreshReminders: () -> Unit,
+    prepareUpdateBackup: suspend () -> Unit,
+    updateBackup: UpdateBackup,
+    updateBackupAt: Long?,
+    wearableSettings: @Composable () -> Unit,
 ) {
     val resolver = LocalContext.current.contentResolver
     val scope = rememberCoroutineScope()
@@ -95,15 +99,17 @@ internal fun SettingsScreen(
             }
             if (!status.contains("reset", ignoreCase = true)) SaveNotice(status, retry)
         }
+        if (!resetting) wearableSettings()
         FeedbackSettings(feedbackEnabled, onFeedbackChanged, previewFeedback)
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             ReminderSettings(diary.prefs, edit, refreshReminders)
         }
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            UpdateSettings()
+            UpdateSettings(prepareUpdateBackup)
         }
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             QuestionText("Your diary backup")
+            if (!resetting) UpdateBackupRecovery(updateBackup, updateBackupAt, onRestore = restore)
             Text("A backup contains readable health data, including your entries and settings. The location you choose may sync the file to the cloud.")
             Button(onClick = {
                 fileStatus = ""
@@ -139,7 +145,7 @@ internal fun SettingsScreen(
             title = { Text(if (final) "Permanently erase this diary?" else "Reset all diary data?") },
             text = {
                 Text(if (final) "Every entry on this device will be permanently deleted. This cannot be undone."
-                    else "This permanently removes your check-ins and activities, resets your settings and turns off reminders. Backups you exported are kept.")
+                    else "This permanently removes your entries and the automatic update backup, resets your settings and turns off reminders. Backups you exported are kept.")
             },
             confirmButton = {
                 TextButton(onClick = {

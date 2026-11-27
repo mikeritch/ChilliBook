@@ -42,7 +42,7 @@ internal fun chooseDiaryDate(context: Context, date: String, min: String? = null
 }
 
 @Composable
-internal fun QuestionText(text: String) {
+internal fun QuestionText(text: String, illustration: Int? = null) {
     val icon = when (text) {
         "How much energy do you have now?" -> R.drawable.diary_spark
         "How refreshed did you feel on waking?" -> R.drawable.diary_pillow
@@ -53,7 +53,13 @@ internal fun QuestionText(text: String) {
         else -> null
     }
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-        icon?.let { DiaryIcon(it, when (it) {
+        if (illustration != null) {
+            val colors = MaterialTheme.colorScheme
+            val tint = if (illustration == R.drawable.diary_moon) colors.tertiaryContainer else colors.primaryContainer
+            Box(Modifier.size(36.dp).background(tint, RoundedCornerShape(24.dp)), contentAlignment = Alignment.Center) {
+                Image(painterResource(illustration), null, Modifier.size(27.dp))
+            }
+        } else icon?.let { DiaryIcon(it, when (it) {
             R.drawable.diary_spark -> categoryAccent("Household")
             R.drawable.diary_pillow -> categoryAccent("Work")
             R.drawable.symbook, R.drawable.diary_bloom, R.drawable.cloud -> categoryAccent("Symptoms")
@@ -66,7 +72,7 @@ internal fun QuestionText(text: String) {
 
 // A quick tap inside a scrolling column can finish before the delayed press indication.
 @Composable
-private fun selectionScale(selected: Boolean, pressed: Boolean): Float {
+internal fun selectionScale(selected: Boolean, pressed: Boolean): Float {
     val press by animateFloatAsState(if (pressed) .94f else 1f, tween(85), label = "press")
     val pulse = remember { Animatable(1f) }
     var previous by remember { mutableStateOf(selected) }

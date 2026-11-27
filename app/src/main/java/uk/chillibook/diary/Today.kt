@@ -64,6 +64,10 @@ internal fun TodayScreen(diary: Diary, saved: Diary, date: String, slot: String,
                     edit { d -> d.changeDay(date) { answer -> answer.copy(stress = level.takeUnless { it == answer.stress }) } }
                 }
             }
+            diary.wearable.find { it.date == date }?.let { reading ->
+                Spacer(Modifier.height(16.dp))
+                TodayWearableReadings(reading)
+            }
             if (!morning) {
                 Spacer(Modifier.height(28.dp))
                 key(date) { EveningActivities(diary, date, edit) }

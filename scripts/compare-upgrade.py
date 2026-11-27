@@ -7,11 +7,11 @@ from pathlib import Path
 def normalized(path, *, candidate=False):
     with path.open(encoding="utf-8") as stream:
         data = json.load(stream)
-    if data.get("format") != "ChilliBook" or data["version"] not in (1, 2, 3, 4, 5, 6, 7, 8):
+    if data.get("format") != "ChilliBook" or data["version"] not in range(1, 12):
         raise ValueError("Unsupported rehearsal export")
     version = data["version"]
-    if candidate and version != 8:
-        raise ValueError("Expected a format 8 export from the updated app")
+    if candidate and version != 11:
+        raise ValueError("Expected a format 11 export from the updated app")
     if version < 3:
         del data["episodes"]
         for day in data["days"]:
@@ -52,10 +52,18 @@ def normalized(path, *, candidate=False):
         for field in ("caffeineTimes", "alcoholTimes"):
             if day[field] is not None:
                 day[field].sort()
-    data["version"] = 8
+    if version < 9:
+        data["wearable"] = []
+    if version < 10:
+        for reading in data["wearable"]:
+            reading["sleepDetail"] = None
+    for reading in data["wearable"]:
+        reading.setdefault("sleepPeriods", None)
+        reading.setdefault("stepHours", None)
+    data["version"] = 11
     for table, keys in {"days": ("date",), "checks": ("date", "slot"),
                         "activities": ("id",), "courses": ("id",),
-                        "regimens": ("id",), "doses": ("id",)}.items():
+                        "regimens": ("id",), "doses": ("id",), "wearable": ("date",)}.items():
         rows = data[table]
         for row in rows:
             for key in ("tags", "demands", "context"):

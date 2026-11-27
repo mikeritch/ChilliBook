@@ -7,8 +7,10 @@ import org.json.JSONObject
 import java.io.FilterReader
 import java.io.Reader
 import java.io.StringReader
+import java.time.Duration
 import java.time.Instant
 import java.time.LocalDate
+import java.time.OffsetDateTime
 import java.time.ZoneId
 
 object Backup {
@@ -46,6 +48,73 @@ object Backup {
 
     private fun set(values: Set<String>) = JSONArray(values.sorted())
     private fun <T> rows(values: List<T>, encode: (T) -> JSONObject) = JSONArray(values.map(encode))
+
+    private val sleepPhaseKinds = setOf("awake", "light", "deep", "rem", "asleep", "unknown")
+
+    internal fun encodeSleepDetail(value: RecordedSleep) = obj(
+        "start" to value.start, "end" to value.end,
+        "phases" to rows(value.phases) { phase -> obj(
+            "startSecond" to phase.startSecond, "endSecond" to phase.endSecond, "kind" to phase.kind
+        ) }
+    )
+
+    internal fun decodeSleepDetail(value: JSONObject): RecordedSleep = value.run {
+        val start = string("start")
+        val end = string("end")
+        val duration = Duration.between(OffsetDateTime.parse(start), OffsetDateTime.parse(end))
+        require(!duration.isZero && !duration.isNegative)
+        val phases = getJSONArray("phases")
+        require(phases.length() <= MAX_SLEEP_PHASES)
+        var previousEnd = 0
+        RecordedSleep(start, end, List(phases.length()) { index ->
+            phases.getJSONObject(index).run {
+                val phaseStart = get("startSecond") as Int
+                val phaseEnd = get("endSecond") as Int
+                val kind = string("kind")
+                require(phaseStart >= previousEnd && phaseEnd > phaseStart && phaseEnd <= duration.seconds)
+                require(kind in sleepPhaseKinds)
+                previousEnd = phaseEnd
+                SleepPhase(phaseStart, phaseEnd, kind)
+            }
+        })
+    }
+
+    internal fun encodeSleepPeriods(value: List<WearableSleepPeriod>) = rows(value) { period ->
+        obj("detail" to encodeSleepDetail(period.detail), "source" to period.source)
+    }
+
+    internal fun decodeSleepPeriods(value: JSONArray, wakeDate: String? = null): List<WearableSleepPeriod> {
+        require(value.length() <= MAX_SLEEP_PERIODS)
+        var previousEnd = Instant.MIN
+        return List(value.length()) { index ->
+            value.getJSONObject(index).run {
+                val detail = decodeSleepDetail(getJSONObject("detail"))
+                val end = OffsetDateTime.parse(detail.end)
+                require(OffsetDateTime.parse(detail.start).toInstant() >= previousEnd)
+                require(wakeDate == null || end.toLocalDate().toString() == wakeDate)
+                previousEnd = end.toInstant()
+                WearableSleepPeriod(detail, text("source"))
+            }
+        }
+    }
+
+    internal fun encodeStepHours(value: List<StepHour>) = rows(value) { hour ->
+        obj("hour" to hour.hour, "steps" to hour.steps)
+    }
+
+    internal fun decodeStepHours(value: JSONArray): List<StepHour> {
+        require(value.length() <= 24)
+        var previousHour = -1
+        return List(value.length()) { index ->
+            value.getJSONObject(index).run {
+                val hour = get("hour") as Int
+                val steps = get("steps") as Int
+                require(hour in 0..23 && hour > previousHour && steps >= 0)
+                previousHour = hour
+                StepHour(hour, steps)
+            }
+        }
+    }
 
     internal fun encodeActivityPins(pins: Map<String, ActivitySetup>) = JSONObject().apply {
         for ((key, pin) in pins) put(key, obj(
@@ -93,7 +162,7 @@ object Backup {
     }
 
     fun encode(diary: Diary): String = obj(
-        "format" to "ChilliBook", "version" to 8,
+        "format" to "ChilliBook", "version" to 11,
         "days" to rows(diary.days) { d -> obj(
             "date" to d.date, "work" to d.work, "social" to d.social, "household" to d.household,
             "wellbeing" to d.wellbeing, "impact" to d.impact, "context" to set(d.context),
@@ -125,6 +194,13 @@ object Backup {
             "date" to d.date, "slot" to d.slot, "status" to d.status, "asNeeded" to d.asNeeded,
             "strength" to d.strength, "amount" to d.amount, "unit" to d.unit, "schedule" to d.schedule,
             "time" to d.time, "reason" to d.reason, "at" to d.at, "zone" to d.zone
+        ) },
+        "wearable" to rows(diary.wearable.sortedBy(WearableReading::date)) { reading -> obj(
+            "date" to reading.date, "steps" to reading.steps, "sleepMinutes" to reading.sleepMinutes,
+            "stepsSource" to reading.stepsSource, "sleepSource" to reading.sleepSource,
+            "sleepDetail" to reading.sleepDetail?.let(::encodeSleepDetail),
+            "sleepPeriods" to reading.sleepPeriods?.let(::encodeSleepPeriods),
+            "stepHours" to reading.stepHours?.let(::encodeStepHours)
         ) },
         "prefs" to obj("id" to diary.prefs.id, "theme" to diary.prefs.theme,
             "morningReminder" to diary.prefs.morningReminder, "eveningReminder" to diary.prefs.eveningReminder,
@@ -199,7 +275,7 @@ object Backup {
             result
         }
         val version = root.get("version") as Int
-        require(root.string("format") == "ChilliBook" && version in 1..8)
+        require(root.string("format") == "ChilliBook" && version in 1..11)
         val days = root.records("days", Day::date) {
             Day(date("date"), bool("work"), bool("social"), bool("household"), level("wellbeing", 0..4),
                 text("impact"), strings("context"), instant(), zone(),
@@ -283,6 +359,18 @@ object Backup {
                 text("strength"), text("amount"), text("unit"), schedule(), text("time")?.also { require(it.length == 5 && java.time.LocalTime.parse(it).toString() == it) }, text("reason"),
                 instant(), zone())
         }
-        return diary.copy(courses = courses, regimens = regimens, doses = doses)
+        val wearable = if (version >= 9) root.records("wearable", WearableReading::date) {
+            val date = date("date")
+            WearableReading(date, level("steps", 0..Int.MAX_VALUE),
+                level("sleepMinutes", 0..Int.MAX_VALUE), text("stepsSource"), text("sleepSource"),
+                sleepDetail = if (version >= 10) optional("sleepDetail")?.let { decodeSleepDetail(it as JSONObject) } else null,
+                sleepPeriods = if (version >= 11 && has("sleepPeriods")) {
+                    optional("sleepPeriods")?.let { decodeSleepPeriods(it as JSONArray, date) }
+                } else null,
+                stepHours = if (version >= 11 && has("stepHours")) {
+                    optional("stepHours")?.let { decodeStepHours(it as JSONArray) }
+                } else null)
+        }.sortedBy(WearableReading::date) else emptyList()
+        return diary.copy(courses = courses, regimens = regimens, doses = doses, wearable = wearable)
     }
 }

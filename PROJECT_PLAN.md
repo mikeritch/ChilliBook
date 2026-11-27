@@ -258,3 +258,33 @@ Ask how stressful the day was immediately after overall wellbeing. Add Back pain
 Below evening Symptoms, let caffeine and alcohol be recorded independently. Each selection saves immediately and opens optional Morning, Afternoon and Evening choices that can be combined. Keep unchecked drinks, recorded intake with unspecified timing, and selected times distinct in storage, History and backup. Each new answer can save a partial evening check-in.
 
 Room schema 8 adds three nullable day columns. Backup format 8 writes the new fields and reads formats 1–7 with those answers unset. Rehearse a signed in-place update over 1.13.3 and check existing entries, including a historical None rating, before editing and reopening the updated diary.
+
+## Automatic pre-update backup · 1.14.1
+
+After verifying the downloaded APK and getting install permission, save a consistent snapshot of the committed diary before opening Android’s installer. Keep one verified, atomically replaced copy in private device storage excluded from Android backup. Wait for accepted edits and abort the installer launch if the diary or snapshot cannot be saved. Preserve the previous copy if writing the replacement fails.
+
+Show the backup timestamp and a restore preview under Settings → Your diary backup. Replacing the live diary requires confirmation. Offer export from Settings and from the diary-open error screen so a failed migration leaves both the original database and a recoverable export. Reset all diary data also removes the automatic copy. Room and the export format remain at version 8.
+
+Add Snooze 1 hour to real check-in reminders. Snoozing one reminder dismisses it and schedules one redelivery for the original date and check-in slot. Preserve the other slot and the user's recurring reminder times. Saving an answer, switching off the reminder or changing its scheduled time cancels the pending snooze. Use the existing Android alert channel and inexact alarm scheduling. Test notifications leave the schedule alone.
+
+## Steps and sleep · 1.15
+
+Offer optional read-only Health Connect access to Steps and Sleep. Refresh up to 30 recent days when the diary opens or on request in Settings. Health Connect combines step sources. Save the longest completed sleep session under its wake date as recorded session duration. Keep a missing reading distinct from zero steps. Preserve older imported dates, and show the source where available.
+
+Show a compact readout for the selected date in Today, include wearable-only dates in History and add separate charts with daily drill-downs in Patterns. Keep wearable readings separate from manual check-ins, energy ratings, streaks and reminder suppression. Pausing sync retains previously imported readings. A diary reset removes those readings and pauses sync.
+
+Room schema 9 adds one table. Backup format 9 includes the imported readings and reads formats 1–8 with an empty wearable log. Verify the signed in-place update over a populated format 8 diary and test Health Connect access, date assignment and presentation using synthetic steps and sleep.
+
+## Interactive Patterns and sleep detail · 1.16
+
+Label each day of the 7-day energy and wearable charts. Select a date or weekly point to see its full date and readings. A weekly point opens the underlying days, and a daily point links to the diary. The medication trend retains its course boundary and dose markers and shows the selected day's reading. Keep gaps and zero values distinct.
+
+Expand Last night in Today to see the recorded start and wake times and stage durations. Add a Sleep page in Patterns with tappable nights and timelines on a common duration scale. Use provider-reported Awake, Light, Deep, REM and unspecified sleep stages. Show unclassified spans and handle readings with only a duration or with no stages. Use the original recorded offsets for clock times and the existing wake date for filing each night.
+
+Room schema 10 adds nullable sleep detail to wearable readings. Backup format 10 preserves the recorded offsets and stage intervals. Earlier backups retain the original daily durations and sources. Rehearse a signed update from 1.15 before importing new stage detail.
+
+## Wearable buttons and split sleep · 1.17
+
+Give Steps and Sleep matching expandable buttons on Today beneath a single illustrated heading. Rotate 30 encouraging messages by diary date. Celebrate checking in at any pace. Expand Steps to show a timeline and totals from 6 am onward when hourly Health Connect readings are available. Keep the all-day total from Health Connect.
+
+Keep distinct completed sleep periods and their source, clocks and stages on the recorded wake date. Count overlapping provider sessions once and give each retained period its own timeline. Use the combined duration in History and Patterns. Room schema 11 and backup format 11 retain older totals and single-session detail and add nullable period and step-hour lists.
