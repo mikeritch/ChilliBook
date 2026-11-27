@@ -250,3 +250,11 @@ Provide separate sound and haptic switches for everyday diary actions and the en
 Play the everyday cue after a diary edit succeeds. Give cleared answers a softer cue. When a saved edit earns a new bloom, use the celebration feedback once in place of the everyday cue. Reopening, switching slots and showing a saved streak stay quiet. Use Android Media vibration for both in-app effects on Android 13 and later, and touch feedback on older versions. Follow the device’s quiet settings and stop feedback when the app goes to the background.
 
 Grow the bloom and add more petals and sparkles at 3, 7 and 14 consecutive completed days. At 14 days and beyond, add a second wave of sparkles. Base the effect on the streak on the day that earned the bloom. Use Android’s standard alerting reminder channel unless the owner customized the original channel. Show the next scheduled date and time if available. Offer a test notification on the same channel that leaves scheduled reminders intact.
+
+## Evening stress and drink timing · 1.14
+
+Ask how stressful the day was immediately after overall wellbeing. Add Back pain to both check-ins and Coffee/Pub to Socialising. Offer Mild, Moderate and Strong for a selected symptom. Keep legacy None ratings readable and allow a symptom to be saved without a severity.
+
+Below evening Symptoms, let caffeine and alcohol be recorded independently. Each selection saves immediately and opens optional Morning, Afternoon and Evening choices that can be combined. Keep unchecked drinks, recorded intake with unspecified timing, and selected times distinct in storage, History and backup. Each new answer can save a partial evening check-in.
+
+Room schema 8 adds three nullable day columns. Backup format 8 writes the new fields and reads formats 1–7 with those answers unset. Rehearse a signed in-place update over 1.13.3 and check existing entries, including a historical None rating, before editing and reopening the updated diary.

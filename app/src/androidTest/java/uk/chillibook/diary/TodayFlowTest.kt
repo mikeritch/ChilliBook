@@ -103,7 +103,7 @@ class TodayFlowTest {
         Storage(context).use { store ->
             val initial = runBlocking { store.read() }
             assumeTrue(initial.dates().isEmpty())
-            val name = "Brain fog"
+            val name = "Back pain"
             fun toggle(action: String) = compose.onNodeWithContentDescription("$action $name").performScrollTo().performClick()
             fun stored(slot: String, rating: Int?) = awaitStored(store) { data ->
                 data.checks.singleOrNull { it.date == today.toString() && it.slot == slot }?.symptoms?.get(name) == rating
@@ -111,27 +111,65 @@ class TodayFlowTest {
             try {
                 ActivityScenario.launch(MainActivity::class.java).use {
                     slot(morning = false)
+                    stored("am", null)
                     toggle("Select")
                     stored("pm", UNRATED_SYMPTOM)
                 }
                 ActivityScenario.launch(MainActivity::class.java).use {
                     slot(morning = false)
-                    choice(name, "Mild").performScrollTo().assertIsNotSelected()
-                    select(name, "None")
-                    stored("pm", 0)
+                    choice(name, "None").assertDoesNotExist()
+                    for (severity in listOf("Mild", "Moderate", "Strong")) {
+                        choice(name, severity).performScrollTo().assertIsNotSelected()
+                    }
+                    select(name, "Moderate")
+                    stored("pm", 2)
                     slot(morning = true)
                     toggle("Select")
+                    stored("am", UNRATED_SYMPTOM)
                     select(name, "Strong")
                     stored("am", 3)
                     slot(morning = false)
-                    choice(name, "None").performScrollTo().assertIsSelected()
+                    choice(name, "Moderate").performScrollTo().assertIsSelected()
                     toggle("Remove")
                     stored("pm", null)
                     compose.onNodeWithContentDescription("Undo removal of $name").performScrollTo().performClick()
-                    stored("pm", 0)
-                    select(name, "None")
+                    stored("pm", 2)
+                    select(name, "Moderate")
                     stored("pm", UNRATED_SYMPTOM)
                     stored("am", 3)
+                }
+            } finally {
+                runBlocking { store.replace(initial) }
+            }
+        }
+    }
+
+    @Test fun previouslyRecordedNoneStaysVisibleUntilCorrected() {
+        assumeTrue(context.packageName.endsWith(".debug"))
+        Storage(context).use { store ->
+            val initial = runBlocking { store.read() }
+            assumeTrue(initial.dates().isEmpty())
+            val date = today.toString()
+            val name = "Brain fog"
+            try {
+                runBlocking {
+                    store.replace(initial.changeCheck(date, "am") { it.copy(symptoms = mapOf(name to 0)) })
+                }
+                ActivityScenario.launch(MainActivity::class.java).use {
+                    slot(morning = true)
+                    val recordedNone = compose.onNodeWithText("Recorded severity: None")
+                    recordedNone.performScrollTo().assertIsDisplayed()
+                    choice(name, "None").assertDoesNotExist()
+                    assertEquals(0, runBlocking { store.read() }.checks.single().symptoms[name])
+                    compose.onNodeWithContentDescription("Remove $name").performScrollTo().performClick()
+                    awaitStored(store) { it.checks.none { check -> name in check.symptoms } }
+                    recordedNone.assertDoesNotExist()
+                    compose.onNodeWithContentDescription("Undo removal of $name").performScrollTo().performClick()
+                    awaitStored(store) { it.checks.singleOrNull()?.symptoms?.get(name) == 0 }
+                    recordedNone.performScrollTo().assertIsDisplayed()
+                    select(name, "Mild")
+                    awaitStored(store) { it.checks.singleOrNull()?.symptoms?.get(name) == 1 }
+                    recordedNone.assertDoesNotExist()
                 }
             } finally {
                 runBlocking { store.replace(initial) }

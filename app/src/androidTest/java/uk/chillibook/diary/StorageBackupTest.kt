@@ -3,6 +3,7 @@ package uk.chillibook.diary
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import kotlinx.coroutines.runBlocking
+import org.json.JSONArray
 import org.json.JSONObject
 import org.junit.Assert.*
 import org.junit.After
@@ -28,11 +29,44 @@ class StorageBackupTest {
         assertEquals(sample, Backup.decode(Backup.encode(sample)))
     }
 
+    @Test fun contextBackupPreservesUnknownsAndRejectsInvalidAnswers() {
+        val day = sample.days.single()
+        val original = sample.copy(days = listOf(day.copy(
+            stress = 0, caffeineTimes = emptySet(), alcoholTimes = setOf("Morning", "Evening")
+        ), day.copy(date = "2026-11-16")))
+        val encoded = Backup.encode(original)
+        assertEquals(original, Backup.decode(encoded))
+
+        val previous = JSONObject(encoded).put("version", 7)
+        val days = previous.getJSONArray("days")
+        for (index in 0 until days.length()) {
+            days.getJSONObject(index).apply {
+                remove("stress")
+                remove("caffeineTimes")
+                remove("alcoholTimes")
+            }
+        }
+        assertEquals(original.copy(days = listOf(day, original.days.last())), Backup.decode(previous.toString()))
+
+        val invalidValues = listOf(
+            "stress" to -1,
+            "stress" to 5,
+            "caffeineTimes" to "Morning",
+            "caffeineTimes" to JSONArray(listOf("Morning", "Morning")),
+            "alcoholTimes" to JSONArray(listOf("Night"))
+        )
+        for ((field, value) in invalidValues) {
+            val damaged = JSONObject(encoded)
+            damaged.getJSONArray("days").getJSONObject(0).put(field, value)
+            assertTrue(field, runCatching { Backup.decode(damaged.toString()) }.isFailure)
+        }
+    }
+
     @Test fun unratedIsDistinctFromNoneAndUnknown() {
         val check = morning.copy(symptoms = mapOf("Brain fog" to UNRATED_SYMPTOM, "Headache" to 0))
         val original = sample.copy(checks = listOf(check))
         val backup = JSONObject(Backup.encode(original))
-        assertEquals(7, backup.getInt("version"))
+        assertEquals(8, backup.getInt("version"))
         assertFalse(backup.getJSONObject("prefs").has("pins"))
         assertFalse(backup.has("episodes"))
         assertFalse(backup.getJSONArray("days").getJSONObject(0).has("workOff"))
@@ -233,7 +267,8 @@ class StorageBackupTest {
     @Test fun missingNullableFieldIsDistinctFromExplicitNull() {
         val backup = Backup.encode(sample.copy(activities = listOf(ActivityEntry(date = morning.date))))
         val fields = mapOf(
-            "days" to listOf("work", "social", "household", "wellbeing", "impact", "noRests"),
+            "days" to listOf("work", "social", "household", "wellbeing", "impact", "noRests",
+                "stress", "caffeineTimes", "alcoholTimes"),
             "checks" to listOf("energy", "sleep"),
             "activities" to listOf("duration", "effort", "worth", "workLength", "workPlace", "restKind", "restPeriod", "restEnergy")
         )
@@ -253,7 +288,7 @@ class StorageBackupTest {
             }
             val missingField = JSONObject(valid).apply { getJSONArray("days").getJSONObject(0).remove("work") }
             val wrongType = JSONObject(valid).apply { getJSONArray("checks").getJSONObject(0).put("energy", "2") }
-            val unsupported = JSONObject(valid).put("version", 8)
+            val unsupported = JSONObject(valid).put("version", 9)
             val badDate = JSONObject(valid).apply { getJSONArray("days").getJSONObject(0).put("date", "2026-02-30") }
             for (damaged in listOf(valid.dropLast(1), valid + "extra", duplicate.toString(), unsupported.toString(),
                 missingField.toString(), wrongType.toString(), badDate.toString())) {

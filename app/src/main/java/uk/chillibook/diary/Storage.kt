@@ -13,9 +13,11 @@ class ValueConverters {
     @TypeConverter fun writeWorkSetup(value: WorkSetup?): String? = value?.let { Backup.encodeWorkSetup(it).toString() }
     @TypeConverter fun readWorkSetup(raw: String?): WorkSetup? = raw?.let { Backup.decodeWorkSetup(JSONObject(it)) }
 
-    @TypeConverter fun writeSet(value: Set<String>): String = JSONArray(value.sorted()).toString()
-    @TypeConverter fun readSet(raw: String): Set<String> = JSONArray(raw).let { array ->
-        (0 until array.length()).mapTo(linkedSetOf()) { array.getString(it) }
+    @TypeConverter fun writeSet(value: Set<String>?): String? =
+        value?.let { JSONArray(it.sorted()).toString() }
+    @TypeConverter fun readSet(raw: String?): Set<String>? = raw?.let {
+        val array = JSONArray(it)
+        (0 until array.length()).mapTo(linkedSetOf()) { index -> array.getString(index) }
     }
     @TypeConverter fun writeSymptoms(value: Map<String, Int>): String = JSONObject(value).toString()
     @TypeConverter fun readSymptoms(raw: String): Map<String, Int> = JSONObject(raw).let { obj ->
@@ -48,10 +50,10 @@ interface DiaryDao {
 }
 
 @Database(entities = [Day::class, Check::class, ActivityEntry::class, Prefs::class,
-    MedicationCourse::class, MedicationRegimen::class, MedicationDose::class], version = 7, exportSchema = true,
+    MedicationCourse::class, MedicationRegimen::class, MedicationDose::class], version = 8, exportSchema = true,
     autoMigrations = [AutoMigration(from = 1, to = 2), AutoMigration(from = 2, to = 3, spec = RemoveRetiredFields::class),
         AutoMigration(from = 3, to = 4, spec = RemoveSymptomPins::class), AutoMigration(from = 4, to = 5),
-        AutoMigration(from = 5, to = 6), AutoMigration(from = 6, to = 7)])
+        AutoMigration(from = 5, to = 6), AutoMigration(from = 6, to = 7), AutoMigration(from = 7, to = 8)])
 @TypeConverters(ValueConverters::class)
 abstract class DiaryDatabase : RoomDatabase() {
     abstract fun diary(): DiaryDao

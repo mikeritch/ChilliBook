@@ -32,7 +32,8 @@ internal fun nextReminder(now: ZonedDateTime, minute: Int, lastDate: String?): Z
 internal fun Check.hasSlotAnswer() = energy != null || sleep != null || symptoms.isNotEmpty()
 
 internal fun Day.hasEveningAnswer() = work != null || social != null || household != null ||
-    wellbeing != null || impact != null || context.isNotEmpty() || noRests == true
+    wellbeing != null || impact != null || context.isNotEmpty() || noRests == true ||
+    stress != null || caffeineTimes != null || alcoholTimes != null
 
 internal fun Diary.answeredReminder(date: String, slot: String): Boolean =
     doses.any { it.date == date && it.slot == slot } ||

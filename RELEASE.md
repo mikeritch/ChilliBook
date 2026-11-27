@@ -7,7 +7,7 @@
 **Over USB.** Enable USB debugging and authorise the computer on the phone. Place the signed APK beside [Install ChilliBook.command](<release/Install ChilliBook.command>) and double-click the command on macOS. With Android SDK Platform-Tools on your path, you can also run the following from the project root.
 
 ```sh
-adb -d install -r release/ChilliBook-1.13.3.apk
+adb -d install -r release/ChilliBook-1.14.apk
 ```
 
 ## Back up or move the diary
@@ -26,12 +26,18 @@ Choose **Settings → Back up diary** and select a private destination. The JSON
 apk=app/build/outputs/apk/release/app-release.apk
 apksigner verify --print-certs "$apk"
 aapt dump badging "$apk" | head -1
-version=1.13.3  # set to the version you just built
+version=1.14  # set to the version you just built
 cp "$apk" "release/ChilliBook-$version.apk"
 git tag "v$version"
 git push origin HEAD "v$version"
 gh release create "v$version" "release/ChilliBook-$version.apk" --verify-tag --generate-notes --latest
 ```
+
+## Release 1.14
+
+Evening check-ins add a five-level stress question below wellbeing and independent caffeine and alcohol selections below Symptoms. Each drink offers optional time-of-day selections. Back pain is available in both check-ins, and Coffee/Pub is available under Socialising. New symptom severity choices are Mild, Moderate and Strong. Existing None ratings remain readable.
+
+Five focused emulator tests passed. The signed 1.13.3 → 1.14 update preserved every record and preference in the synthetic diary. [Evening stress](verification/1.14/evening-stress.png) · [Caffeine and alcohol](verification/1.14/evening-drinks.png)
 
 ## Release 1.13.3
 

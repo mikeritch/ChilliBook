@@ -56,6 +56,13 @@ internal fun TodayScreen(diary: Diary, saved: Diary, date: String, slot: String,
                 AnswerGrid(question, wellbeingLabels, day?.wellbeing, 5) { level ->
                     edit { d -> d.changeDay(date) { answer -> answer.copy(wellbeing = level.takeUnless { it == answer.wellbeing }) } }
                 }
+                Spacer(Modifier.height(18.dp))
+                val stressQuestion = "How stressful was your day?"
+                QuestionText(stressQuestion)
+                Spacer(Modifier.height(10.dp))
+                AnswerGrid(stressQuestion, stressLabels, day?.stress, 5) { level ->
+                    edit { d -> d.changeDay(date) { answer -> answer.copy(stress = level.takeUnless { it == answer.stress }) } }
+                }
             }
             if (!morning) {
                 Spacer(Modifier.height(28.dp))
@@ -63,6 +70,10 @@ internal fun TodayScreen(diary: Diary, saved: Diary, date: String, slot: String,
             }
             Spacer(Modifier.height(28.dp))
             key(date, slot) { TodayDetails(diary, date, slot, edit) }
+            if (!morning) {
+                Spacer(Modifier.height(20.dp))
+                EveningDrinks(date, day, edit)
+            }
             Spacer(Modifier.height(20.dp))
             key(date, slot) { TodayMedication(diary, date, slot, edit, manageMedication) }
             if (!morning) {

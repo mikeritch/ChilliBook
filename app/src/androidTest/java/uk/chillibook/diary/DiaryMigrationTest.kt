@@ -93,6 +93,29 @@ class DiaryMigrationTest {
         Storage(context, file).use { assertEquals(updated, it.read()) }
     }
 
+    @Test fun populatedV7RetainsDiaryAndMedicationAcrossContextEditAndReopen() = runBlocking {
+        val date = "2026-11-03"
+        val at = "2026-11-04T00:03:00Z"
+        val zone = "America/New_York"
+        createReleasedDatabase(7).use { db ->
+            db.execSQL("""INSERT INTO days (date,work,context,at,zone)
+                VALUES (?,0,'["Fighting a bug"]',?,?)""", arrayOf(date, at, zone))
+            db.execSQL("""INSERT INTO medication_courses (id,name,ended,at,zone)
+                VALUES ('course','Example',1,?,?)""", arrayOf(at, zone))
+        }
+        val day = Day(date, work = false, context = setOf("Fighting a bug"), at = at, zone = zone)
+        val original = Diary(days = listOf(day),
+            courses = listOf(MedicationCourse("course", "Example", null, null, true, at, zone)))
+        val updated = original.copy(days = listOf(day.copy(
+            stress = 0, caffeineTimes = emptySet(), alcoholTimes = setOf("Morning", "Evening")
+        )))
+        Storage(context, file).use { store ->
+            assertEquals(original, store.read())
+            store.save(original, updated)
+        }
+        Storage(context, file).use { assertEquals(updated, it.read()) }
+    }
+
     private fun checkUpgrade(version: Int) = runBlocking {
         val at = "2026-11-18T16:02:12Z"
         val zone = "America/New_York"

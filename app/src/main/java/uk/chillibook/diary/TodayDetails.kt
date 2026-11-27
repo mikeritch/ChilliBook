@@ -44,11 +44,16 @@ internal fun TodayDetails(diary: Diary, date: String, slot: String, edit: DiaryE
             })
         }
     }
-    for (name in names.filter { it in symptoms }) {
+    for (name in names) {
+        val severity = symptoms[name] ?: continue
         Spacer(Modifier.height(16.dp))
         Text(name, style = MaterialTheme.typography.titleMedium)
         Spacer(Modifier.height(6.dp))
-        AnswerGrid(name, severityLabels, symptoms[name]) { rating ->
+        if (severity == 0) {
+            Text("Recorded severity: ${severityLabels[0]}", style = MaterialTheme.typography.bodyMedium)
+            Spacer(Modifier.height(6.dp))
+        }
+        AnswerGrid(name, severityLabels, severity, firstChoice = 1) { rating ->
             edit { d -> d.changeCheck(date, slot) { val value = if (it.symptoms[name] == rating) UNRATED_SYMPTOM else rating
                 it.copy(symptoms = it.symptoms + (name to value)) } }
         }

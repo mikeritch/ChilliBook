@@ -93,11 +93,12 @@ object Backup {
     }
 
     fun encode(diary: Diary): String = obj(
-        "format" to "ChilliBook", "version" to 7,
+        "format" to "ChilliBook", "version" to 8,
         "days" to rows(diary.days) { d -> obj(
             "date" to d.date, "work" to d.work, "social" to d.social, "household" to d.household,
             "wellbeing" to d.wellbeing, "impact" to d.impact, "context" to set(d.context),
-            "at" to d.at, "zone" to d.zone, "noRests" to d.noRests
+            "at" to d.at, "zone" to d.zone, "noRests" to d.noRests, "stress" to d.stress,
+            "caffeineTimes" to d.caffeineTimes?.let(::set), "alcoholTimes" to d.alcoholTimes?.let(::set)
         ) },
         "checks" to rows(diary.checks) { c -> obj(
             "date" to c.date, "slot" to c.slot, "energy" to c.energy, "sleep" to c.sleep,
@@ -173,6 +174,8 @@ object Backup {
             require(item.isNotBlank() && add(item))
         } }
     }
+    private fun JSONObject.drinkPeriods(key: String): Set<String>? =
+        optional(key)?.let { strings(key).also { times -> require(times.all { it in drinkTimes }) } }
     private fun checkedDate(raw: String) = raw.also { require(it.length == 10 && LocalDate.parse(it).year in 1..9999 && LocalDate.parse(it).toString() == it) }
     private fun JSONObject.date(key: String) = checkedDate(string(key))
     private fun JSONObject.instant() = string("at").also { Instant.parse(it) }
@@ -196,11 +199,14 @@ object Backup {
             result
         }
         val version = root.get("version") as Int
-        require(root.string("format") == "ChilliBook" && version in 1..7)
+        require(root.string("format") == "ChilliBook" && version in 1..8)
         val days = root.records("days", Day::date) {
             Day(date("date"), bool("work"), bool("social"), bool("household"), level("wellbeing", 0..4),
                 text("impact"), strings("context"), instant(), zone(),
-                noRests = if (version >= 6) bool("noRests").also { require(it != false) } else null)
+                noRests = if (version >= 6) bool("noRests").also { require(it != false) } else null,
+                stress = if (version >= 8) level("stress", 0..4) else null,
+                caffeineTimes = if (version >= 8) drinkPeriods("caffeineTimes") else null,
+                alcoholTimes = if (version >= 8) drinkPeriods("alcoholTimes") else null)
         }
         val severityRange = (if (version >= 3) UNRATED_SYMPTOM else 0)..3
         val checks = root.records("checks", { c: Check -> c.date to c.slot }) {

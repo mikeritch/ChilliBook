@@ -57,7 +57,7 @@ class LargeTextFlowTest {
                     compose.onNodeWithContentDescription("Morning check-in").performScrollTo()
                     picture("morning")
                     compose.onNodeWithContentDescription("Select Brain fog").performScrollTo().assertIsDisplayed().performClick()
-                    select("Brain fog", severityLabels)
+                    select("Brain fog", severityLabels.drop(1))
                     picture("symptom")
                     compose.onNodeWithContentDescription("Evening check-in").performScrollTo().performClick()
                     select("How much energy do you have now?", energyLabels.reversed())

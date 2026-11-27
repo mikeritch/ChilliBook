@@ -14,7 +14,8 @@ private fun zoneNow() = ZoneId.systemDefault().id
 data class Day(@PrimaryKey val date: String, val work: Boolean? = null, val social: Boolean? = null,
     val household: Boolean? = null, val wellbeing: Int? = null, val impact: String? = null,
     val context: Set<String> = emptySet(),
-    val at: String = now(), val zone: String = zoneNow(), val noRests: Boolean? = null)
+    val at: String = now(), val zone: String = zoneNow(), val noRests: Boolean? = null,
+    val stress: Int? = null, val caffeineTimes: Set<String>? = null, val alcoholTimes: Set<String>? = null)
 
 @Entity(tableName = "checks", primaryKeys = ["date","slot"])
 data class Check(val date: String, val slot: String, val energy: Int? = null, val sleep: Int? = null,
@@ -58,13 +59,15 @@ data class Diary(val days: List<Day> = emptyList(), val checks: List<Check> = em
 val energyLabels = listOf("Very low","Low","Medium","Fairly high","High")
 val sleepLabels = listOf("Unrefreshed","A little","Mostly","Fully")
 val wellbeingLabels = listOf("Very rough","Rough","Mixed","Fairly well","Well")
+internal val stressLabels = listOf("Not stressful", "A little", "Moderate", "Very", "Extremely")
+internal val drinkTimes = listOf("Morning", "Afternoon", "Evening")
 // A selected symptom can be saved before the person chooses a severity.
 internal const val UNRATED_SYMPTOM = -1
 val severityLabels = listOf("None","Mild","Moderate","Strong")
-val symptomLabels = listOf("Brain fog","Heavy fatigue","Muscle or joint pain","Headache","Dizzy when upright","Flu-like feeling","Light or sound sensitivity")
+val symptomLabels = listOf("Brain fog","Heavy fatigue","Muscle or joint pain","Back pain","Headache","Dizzy when upright","Flu-like feeling","Light or sound sensitivity")
 val categoryTags = mapOf(
     "Work" to setOf("Work","Meetings","Focused work","Commute"),
-    "Socialising" to setOf("Socialising","Call","Visit","Meal out"),
+    "Socialising" to setOf("Socialising","Call","Visit","Meal out","Coffee/Pub"),
     "Household" to setOf("Household","Cooking","Laundry","Cleaning","Shopping")
 )
 val otherTags = listOf("Personal care","Travel","Walking","Admin/screens","Quiet rest","Hobby")

@@ -47,6 +47,7 @@ internal fun QuestionText(text: String) {
         "How much energy do you have now?" -> R.drawable.diary_spark
         "How refreshed did you feel on waking?" -> R.drawable.diary_pillow
         "How did today feel overall?" -> R.drawable.diary_bloom
+        "How stressful was your day?" -> R.drawable.cloud
         "What did you do?" -> R.drawable.diary_sprout
         "Symptoms" -> R.drawable.symbook
         else -> null
@@ -55,7 +56,7 @@ internal fun QuestionText(text: String) {
         icon?.let { DiaryIcon(it, when (it) {
             R.drawable.diary_spark -> categoryAccent("Household")
             R.drawable.diary_pillow -> categoryAccent("Work")
-            R.drawable.symbook, R.drawable.diary_bloom -> categoryAccent("Symptoms")
+            R.drawable.symbook, R.drawable.diary_bloom, R.drawable.cloud -> categoryAccent("Symptoms")
             else -> MaterialTheme.colorScheme.primary
         }) }
         Text(text, style = MaterialTheme.typography.titleMedium.copy(fontSize = 18.sp, lineHeight = 24.sp),
@@ -129,13 +130,13 @@ internal fun AnswerTile(question: String, label: String, active: Boolean, modifi
 
 @Composable
 internal fun AnswerGrid(question: String, labels: List<String>, selected: Int?, columns: Int = 2,
-                       bars: Boolean = false, onChoice: (Int) -> Unit) {
+                       bars: Boolean = false, firstChoice: Int = 0, onChoice: (Int) -> Unit) {
     BoxWithConstraints {
         val scale = LocalDensity.current.fontScale
         val minimum = (if (columns == 5) 60 else 118) * scale
         val cols = (maxWidth.value / minimum).toInt().coerceIn(1, columns)
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            labels.indices.chunked(cols).forEach { indices ->
+            (firstChoice..labels.lastIndex).chunked(cols).forEach { indices ->
                 Row(horizontalArrangement = Arrangement.spacedBy(if (cols == 5) 6.dp else 8.dp),
                     modifier = Modifier.height(IntrinsicSize.Min)) {
                     indices.forEach { i ->

@@ -13,6 +13,9 @@ internal fun diaryEditCue(before: Diary, after: Diary, date: String?): FeedbackC
         add(answerCue(oldDay?.social, newDay?.social))
         add(answerCue(oldDay?.household, newDay?.household))
         add(answerCue(oldDay?.wellbeing, newDay?.wellbeing))
+        add(answerCue(oldDay?.stress, newDay?.stress))
+        add(drinkCue(oldDay?.caffeineTimes, newDay?.caffeineTimes))
+        add(drinkCue(oldDay?.alcoholTimes, newDay?.alcoholTimes))
         add(answerCue(oldDay?.impact, newDay?.impact))
         add(answerCue(oldDay?.noRests?.takeIf { it }, newDay?.noRests?.takeIf { it }))
         add(choiceCue(oldDay?.context.orEmpty(), newDay?.context.orEmpty()))
@@ -46,6 +49,9 @@ private fun answerCue(before: Any?, after: Any?): FeedbackCue? = when {
     after == null -> FeedbackCue.Clear
     else -> FeedbackCue.Select
 }
+
+private fun drinkCue(before: Set<String>?, after: Set<String>?): FeedbackCue? =
+    if (before == null || after == null) answerCue(before, after) else choiceCue(before, after)
 
 private fun choiceCue(before: Set<String>, after: Set<String>): FeedbackCue? = when {
     before == after -> null

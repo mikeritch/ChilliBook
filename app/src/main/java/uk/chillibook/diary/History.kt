@@ -195,7 +195,15 @@ fun DateDetail(diary: Diary,date: String,edit:(String)->Unit) {
             val check = checks.find { it.slot == slot }
             Text("Energy · " + (check?.energy?.let(energyLabels::get) ?: "Not recorded"))
             if (slot == "am") Text("Waking refreshment · " + (check?.sleep?.let(sleepLabels::get) ?: "Not recorded"))
+            if (slot == "pm") {
+                Text("Overall wellbeing · " + (day?.wellbeing?.let(wellbeingLabels::get) ?: "No entry"))
+                day?.stress?.let { Text("Stress · ${stressLabels[it]}") }
+            }
             for ((name, value) in check?.symptoms.orEmpty()) Text("$name · ${symptomRatingLabel(value)}")
+            if (slot == "pm") {
+                day?.caffeineTimes?.let { Text("Caffeine · ${drinkHistoryLabel(it)}") }
+                day?.alcoholTimes?.let { Text("Alcohol · ${drinkHistoryLabel(it)}") }
+            }
             diary.courses.forEach { course ->
                 val actual = diary.doses.filter { it.courseId == course.id && it.date == date && it.slot == slot }
                 val plan = diary.scheduledRegimen(course, date)
@@ -207,7 +215,6 @@ fun DateDetail(diary: Diary,date: String,edit:(String)->Unit) {
                 }
             }
             if (slot == "pm") {
-                Text("Overall wellbeing · " + (day?.wellbeing?.let(wellbeingLabels::get) ?: "No entry"))
                 categoryTags.keys.forEach { name ->
                     val answer = when(activityFlag(day,activities,name)) { true -> "Yes"; false -> "No"; null -> "Unanswered" }
                     Text("$name · $answer")
@@ -247,6 +254,9 @@ fun DateDetail(diary: Diary,date: String,edit:(String)->Unit) {
         Spacer(Modifier.height(16.dp))
     }
 }
+
+private fun drinkHistoryLabel(times: Set<String>): String =
+    if (times.isEmpty()) "Recorded, time unspecified" else drinkTimes.filter { it in times }.joinToString(" · ")
 
 internal fun nearbyDayLines(diary: Diary, date: LocalDate, today: LocalDate, includeEvening: Boolean): List<String> {
     if (date > today) return listOf("Still to come")

@@ -81,7 +81,7 @@ private val nightScale = listOf(0xFFFF94AE, 0xFFFFAE86, 0xFFF7D477, 0xFFB1E68D, 
 
 @Composable
 internal fun scaleAccent(labels: List<String>, index: Int): Color? {
-    val reverse = labels == severityLabels
+    val reverse = labels == severityLabels || labels == stressLabels
     if (!reverse && labels != energyLabels && labels != sleepLabels && labels != wellbeingLabels) return null
     val step = ((if (reverse) labels.lastIndex - index else index) * 4f / labels.lastIndex).roundToInt()
     return (if (MaterialTheme.colorScheme.background.luminance() < .5f) nightScale else paperScale)[step]
