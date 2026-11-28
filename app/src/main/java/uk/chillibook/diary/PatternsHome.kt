@@ -27,7 +27,8 @@ import androidx.compose.ui.unit.dp
 import java.time.LocalDate
 
 private enum class PatternsPage { Overview, Activities, Symptoms, Medication, Sleep }
-private val ranges = listOf(7, 28, 90, 0)
+private val shareRanges = listOf(7, 28, 90)
+private val ranges = shareRanges + 0
 private fun rangeLabel(days: Int) = if (days == 0) "All time" else "$days days"
 
 @Composable
@@ -52,6 +53,13 @@ fun PatternsScreen(diary: Diary, onDate: (String) -> Unit, onToday: () -> Unit, 
     var reviewDate by rememberSaveable { mutableStateOf<String?>(null) }
     val states = rememberSaveableStateHolder()
     val overview = { page = PatternsPage.Overview }
+    var sharing by rememberSaveable { mutableStateOf(false) }
+    if (sharing && period in shareRanges) {
+        val share = remember { patternsAiShare(diary, start, end) }
+        val dates = remember { start to end }
+        PatternsAiSharePreview(share, dates.first, dates.second) { sharing = false }
+        return
+    }
     BackHandler(page != PatternsPage.Overview, onBack = overview)
     when (page) {
         PatternsPage.Sleep -> SleepPatterns(diary.wearable, wearableStart, end, onDate, overview)
@@ -68,7 +76,7 @@ fun PatternsScreen(diary: Diary, onDate: (String) -> Unit, onToday: () -> Unit, 
             Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())
                 .padding(horizontal = 16.dp).padding(bottom = 24.dp),
                 verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                PatternsHeader(period) { period = it }
+                PatternsHeader(period, choose = { period = it }, onShare = { sharing = true })
                 PatternsCard("Your energy", hero = true) {
                     PatternsEnergy(index, start, end, weekly = period == 90 || period == 0, onDate = onDate,
                         onToday = onToday, onChooseEnd = { chooseDiaryDate(context, end.toString()) { endDate = it } })
@@ -104,38 +112,42 @@ fun PatternsScreen(diary: Diary, onDate: (String) -> Unit, onToday: () -> Unit, 
 }
 
 @Composable
-private fun PatternsHeader(period: Int, choose: (Int) -> Unit) {
+private fun PatternsHeader(period: Int, choose: (Int) -> Unit, onShare: () -> Unit) {
     var expanded by remember { mutableStateOf(false) }
-    val large = LocalDensity.current.fontScale > 1.35f
-    val title: @Composable () -> Unit = {
-        Row(verticalAlignment = Alignment.CenterVertically) {
+    val canShare = period in shareRanges
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Row(Modifier.heightIn(min = 52.dp), verticalAlignment = Alignment.CenterVertically) {
             Text("Patterns", Modifier.semantics { heading() }, style = MaterialTheme.typography.headlineLarge,
                 fontFamily = FontFamily.Serif)
-            if (!large) Image(painterResource(R.drawable.diary_plot), null, Modifier.padding(start = 5.dp).size(36.dp))
-        }
-    }
-    val picker: @Composable () -> Unit = {
-        Box {
-            OutlinedButton(onClick = { expanded = true }) {
-                Text(rangeLabel(period))
-                Text("  ▾")
+            if (LocalDensity.current.fontScale <= 1.35f) {
+                Image(painterResource(R.drawable.diary_plot), null, Modifier.padding(start = 5.dp).size(36.dp))
             }
-            DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-                ranges.forEach { days ->
-                    DropdownMenuItem(text = { Text(rangeLabel(days)) }, onClick = {
-                        expanded = false
-                        choose(days)
-                    }, trailingIcon = if (days == period) ({ Text("●", color = MaterialTheme.colorScheme.primary) }) else null)
+        }
+        PatternsShareActions(
+            first = { modifier ->
+                Box {
+                    OutlinedButton(onClick = { expanded = true }, modifier = modifier) {
+                        Text(rangeLabel(period))
+                        Spacer(Modifier.width(8.dp))
+                        Text("▾")
+                    }
+                    DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+                        ranges.forEach { days ->
+                            DropdownMenuItem(text = { Text(rangeLabel(days)) }, onClick = {
+                                expanded = false
+                                choose(days)
+                            }, trailingIcon = if (days == period) {
+                                { Text("●", color = MaterialTheme.colorScheme.primary) }
+                            } else null)
+                        }
+                    }
                 }
-            }
-        }
+            },
+            second = if (canShare) {
+                { modifier -> Button(onClick = onShare, modifier = modifier) { Text("Share to AI App") } }
+            } else null
+        )
     }
-    if (large) Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        title()
-        picker()
-    }
-    else Row(Modifier.fillMaxWidth().heightIn(min = 60.dp), verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween) { title(); picker() }
 }
 
 @Composable

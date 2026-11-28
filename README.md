@@ -8,7 +8,9 @@ ChilliBook is an Android diary for people living with ME/CFS. A single answer sa
 
 ## Privacy and updates
 
-Your diary lives in a local Room database. Check-ins, charts and reminders work offline. ChilliBook contacts GitHub when you choose to check for or download a release. GitHub receives ordinary download request information such as the IP address. Diary entries stay on the phone unless you explicitly export them. An exported JSON file contains readable health data.
+Your diary lives in a local Room database. Check-ins, charts and reminders work offline. ChilliBook contacts GitHub when you choose to check for or download a release. GitHub receives ordinary download request information such as the IP address. JSON backups contain readable health data.
+
+**Share to AI App** prepares a preview on your phone from the selected 7, 28 or 90 days. You can copy the text or choose a receiving app through Android’s share sheet. The shared text contains personal diary data and is handled by the receiving app.
 
 The Android installer asks you to confirm updates. Keep the app installed to preserve the diary. ChilliBook migrates its stored data automatically as needed.
 

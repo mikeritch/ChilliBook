@@ -7,7 +7,7 @@
 **Over USB.** Enable USB debugging and authorise the computer on the phone. Place the signed APK beside [Install ChilliBook.command](<release/Install ChilliBook.command>) and double-click the command on macOS. With Android SDK Platform-Tools on your path, you can also run the following from the project root.
 
 ```sh
-adb -d install -r release/ChilliBook-1.17.apk
+adb -d install -r release/ChilliBook-1.18.apk
 ```
 
 ## Back up or move the diary
@@ -28,12 +28,16 @@ Starting with updates launched from 1.17, ChilliBook verifies a private backup b
 apk=app/build/outputs/apk/release/app-release.apk
 apksigner verify --print-certs "$apk"
 aapt dump badging "$apk" | head -1
-version=1.17  # set to the version you just built
+version=1.18  # set to the version you just built
 cp "$apk" "release/ChilliBook-$version.apk"
 git tag "v$version"
 git push origin HEAD "v$version"
 gh release create "v$version" "release/ChilliBook-$version.apk" --verify-tag --generate-notes --latest
 ```
+
+## Release 1.18
+
+In Patterns, choose 7, 28 or 90 days and tap **Share to AI App**. Review the prompt and expand the daily entries to see what is included. Then choose **Copy for AI** or open Android’s share sheet. The selected range supplies the diary data, including gaps. Sharing starts only when you choose a destination.
 
 ## Release 1.17
 
